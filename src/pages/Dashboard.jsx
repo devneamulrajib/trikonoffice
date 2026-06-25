@@ -1,15 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import {
-  Target, ArrowUpRight, Wallet, Activity, TrendingUp, TrendingDown,
+  Target, ArrowUpRight, Wallet, Activity,
   Plus, ShieldCheck, ListFilter, ClipboardList, CreditCard,
   Layers, History, Settings as SettingsIcon,
   Headphones, Users, Phone, PhoneCall, ArrowLeftRight,
-  MessageSquare, BookOpen, FileText, Table2, Upload, Layout,
-  ChevronRight, BarChart2, Building2, LogOut, Bell
+  MessageSquare, BookOpen, FileText, Table2, Upload,
+  BarChart2
 } from 'lucide-react';
 
 // ─── CUSTOM TOOLTIP ───────────────────────────────────────────────────────────
@@ -134,124 +134,40 @@ const SubMenuCard = ({ icon, label, description, color, onClick, badge }) => (
   </button>
 );
 
-// ─── SIDEBAR NAV ITEM ─────────────────────────────────────────────────────────
-const NavItem = ({ icon, label, active, onClick, badge }) => (
-  <button
-    onClick={onClick}
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      padding: '10px 14px',
-      borderRadius: 10,
-      border: 'none',
-      background: active ? '#EEF2FF' : 'transparent',
-      color: active ? '#4F46E5' : '#64748B',
-      fontWeight: active ? 600 : 400,
-      fontSize: 13,
-      cursor: 'pointer',
-      width: '100%',
-      textAlign: 'left',
-      transition: 'all 0.15s ease',
-      position: 'relative',
-    }}
-    onMouseEnter={e => {
-      if (!active) {
-        e.currentTarget.style.background = '#F8FAFC';
-        e.currentTarget.style.color = '#0F172A';
-      }
-    }}
-    onMouseLeave={e => {
-      if (!active) {
-        e.currentTarget.style.background = 'transparent';
-        e.currentTarget.style.color = '#64748B';
-      }
-    }}
-  >
-    {React.cloneElement(icon, { size: 16 })}
-    <span style={{ flex: 1 }}>{label}</span>
-    {badge > 0 && (
-      <span style={{
-        background: '#EF4444', color: '#FFF',
-        fontSize: 10, fontWeight: 700,
-        minWidth: 18, height: 18,
-        borderRadius: 9, display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '0 5px',
-      }}>
-        {badge}
-      </span>
-    )}
-    {active && (
-      <div style={{
-        position: 'absolute', left: 0, top: '50%',
-        transform: 'translateY(-50%)',
-        width: 3, height: 20,
-        background: '#4F46E5',
-        borderRadius: '0 4px 4px 0',
-      }} />
-    )}
-  </button>
-);
-
-// ─── NAV SECTION LABEL ────────────────────────────────────────────────────────
-const NavLabel = ({ children }) => (
-  <p style={{
-    fontSize: 10, fontWeight: 700, color: '#CBD5E1',
-    textTransform: 'uppercase', letterSpacing: '0.1em',
-    padding: '16px 14px 6px',
-  }}>
-    {children}
-  </p>
-);
-
-// ─── SECTION CONTENT DEFINITIONS ─────────────────────────────────────────────
-const SECTIONS = {
-  dashboard: { label: 'Dashboard', isDashboard: true },
-  finance: {
-    label: 'Finance',
-    items: [
-      { key: 'add_expense',    icon: <Plus />,          label: 'Log Transaction',  description: 'Record a new expense entry',          color: '#10B981' },
-      { key: 'budget_request', icon: <Wallet />,         label: 'Phase Planning',   description: 'Create & manage budget requests',     color: '#3B82F6' },
-      { key: 'budget_history', icon: <ListFilter />,     label: 'History Ledger',   description: 'Browse all budget history records',   color: '#F59E0B' },
-      { key: 'reports',        icon: <ClipboardList />,  label: 'Audit Reports',    description: 'Generate financial audit reports',    color: '#8B5CF6' },
-      { key: 'salary_advance', icon: <CreditCard />,     label: 'Pay Advance',      description: 'Manage salary advance requests',      color: '#EF4444' },
-      { key: 'approvals',      icon: <ShieldCheck />,    label: 'Authorizations',   description: 'Review & approve pending requests',   color: '#EC4899', badge: true },
-    ]
-  },
-  clients: {
-    label: 'Client Management',
-    items: [
-      { key: 'clients',        icon: <Users />,   label: 'Clients',        description: 'View & manage all client records',   color: '#8B5CF6' },
-      { key: 'clients_manage', icon: <Table2 />,  label: 'Manage Clients', description: 'Edit, search & organise clients',    color: '#3B82F6' },
-      { key: 'clients_import', icon: <Upload />,  label: 'Import Clients', description: 'Bulk import from CSV or Excel',       color: '#10B981' },
-    ]
-  },
-  callcenter: {
-    label: 'Call Center',
-    items: [
-      { key: 'call_center',    icon: <Headphones />,     label: 'Call Center Hub',  description: 'All call center operations',           color: '#0EA5E9' },
-      { key: 'cc_new_call',    icon: <Phone />,           label: 'New Call',         description: 'Log inbound or outbound call',         color: '#10B981' },
-      { key: 'cc_follow_up',   icon: <PhoneCall />,       label: 'Follow Up',        description: 'Track scheduled follow-up calls',      color: '#6366F1' },
-      { key: 'cc_transfer',    icon: <ArrowLeftRight />,  label: 'Transfer Request', description: 'Submit & review call transfers',        color: '#F59E0B' },
-      { key: 'cc_comments',    icon: <MessageSquare />,   label: 'Comments',         description: 'Notes & comments on call records',     color: '#EC4899' },
-      { key: 'cc_call_logs',   icon: <BookOpen />,        label: 'Call Logs',        description: 'Full searchable call history',         color: '#64748B' },
-      { key: 'cc_requirements',icon: <FileText />,        label: 'Requirements',     description: 'Client requirements from calls',       color: '#059669' },
-    ]
-  },
-  system: {
-    label: 'System',
-    items: [
-      { key: 'categories', icon: <Layers />,       label: 'Sectors',    description: 'Manage expense categories & sectors',  color: '#6366F1' },
-      { key: 'activity',   icon: <History />,       label: 'Audit Trail',description: 'View all system activity logs',         color: '#0EA5E9' },
-      { key: 'reports',    icon: <BarChart2 />,     label: 'Analytics',  description: 'Usage & financial analytics',           color: '#10B981' },
-      { key: 'settings',   icon: <SettingsIcon />,  label: 'Settings',   description: 'App preferences & configuration',      color: '#94A3B8' },
-    ]
-  },
+// ─── SECTION DEFINITIONS ──────────────────────────────────────────────────────
+const SECTION_ITEMS = {
+  finance: [
+    { key: 'add_expense',    icon: <Plus />,          label: 'Log Transaction',  description: 'Record a new expense entry',          color: '#10B981' },
+    { key: 'budget_request', icon: <Wallet />,         label: 'Phase Planning',   description: 'Create & manage budget requests',     color: '#3B82F6' },
+    { key: 'budget_history', icon: <ListFilter />,     label: 'History Ledger',   description: 'Browse all budget history records',   color: '#F59E0B' },
+    { key: 'reports',        icon: <ClipboardList />,  label: 'Audit Reports',    description: 'Generate financial audit reports',    color: '#8B5CF6' },
+    { key: 'salary_advance', icon: <CreditCard />,     label: 'Pay Advance',      description: 'Manage salary advance requests',      color: '#EF4444' },
+    { key: 'approvals',      icon: <ShieldCheck />,    label: 'Authorizations',   description: 'Review & approve pending requests',   color: '#EC4899', badge: true },
+  ],
+  clients: [
+    { key: 'clients',        icon: <Users />,   label: 'Clients',        description: 'View & manage all client records',   color: '#8B5CF6' },
+    { key: 'clients_manage', icon: <Table2 />,  label: 'Manage Clients', description: 'Edit, search & organise clients',    color: '#3B82F6' },
+    { key: 'clients_import', icon: <Upload />,  label: 'Import Clients', description: 'Bulk import from CSV or Excel',       color: '#10B981' },
+  ],
+  callcenter: [
+    { key: 'call_center',     icon: <Headphones />,     label: 'Call Center Hub',  description: 'All call center operations',           color: '#0EA5E9' },
+    { key: 'cc_new_call',     icon: <Phone />,           label: 'New Call',         description: 'Log inbound or outbound call',         color: '#10B981' },
+    { key: 'cc_follow_up',    icon: <PhoneCall />,       label: 'Follow Up',        description: 'Track scheduled follow-up calls',      color: '#6366F1' },
+    { key: 'cc_transfer',     icon: <ArrowLeftRight />,  label: 'Transfer Request', description: 'Submit & review call transfers',        color: '#F59E0B' },
+    { key: 'cc_comments',     icon: <MessageSquare />,   label: 'Comments',         description: 'Notes & comments on call records',     color: '#EC4899' },
+    { key: 'cc_call_logs',    icon: <BookOpen />,        label: 'Call Logs',        description: 'Full searchable call history',         color: '#64748B' },
+    { key: 'cc_requirements', icon: <FileText />,        label: 'Requirements',     description: 'Client requirements from calls',       color: '#059669' },
+  ],
+  system: [
+    { key: 'categories', icon: <Layers />,       label: 'Sectors',     description: 'Manage expense categories & sectors',  color: '#6366F1' },
+    { key: 'activity',   icon: <History />,       label: 'Audit Trail', description: 'View all system activity logs',         color: '#0EA5E9' },
+    { key: 'analytics',  icon: <BarChart2 />,     label: 'Analytics',   description: 'Usage & financial analytics',           color: '#10B981' },
+    { key: 'settings',   icon: <SettingsIcon />,  label: 'Settings',    description: 'App preferences & configuration',      color: '#94A3B8' },
+  ],
 };
 
-// ─── DASHBOARD (charts + stats) ───────────────────────────────────────────────
-const DashboardContent = ({ chartData, approved, spent, month, db }) => {
+// ─── DASHBOARD CHARTS & STATS ─────────────────────────────────────────────────
+const DashboardHome = ({ chartData, approved, spent, month, db }) => {
   const remaining = approved - spent;
   const util = approved > 0 ? (spent / approved) * 100 : 0;
 
@@ -262,29 +178,24 @@ const DashboardContent = ({ chartData, approved, spent, month, db }) => {
       d.setMonth(d.getMonth() - i);
       const m = d.toISOString().slice(0, 7);
       const label = d.toLocaleString('default', { month: 'short' });
-      const spentAmt = db.expenses.filter(e => e.date.startsWith(m)).reduce((s, e) => s + e.amount, 0);
-      const budgetAmt = db.budgetRequests.filter(b => b.month === m && b.status === 'approved').reduce((s, b) => s + b.total, 0);
+      const spentAmt = (db.expenses || []).filter(e => e.date.startsWith(m)).reduce((s, e) => s + e.amount, 0);
+      const budgetAmt = (db.budgetRequests || []).filter(b => b.month === m && b.status === 'approved').reduce((s, b) => s + b.total, 0);
       months.push({ month: label, spent: spentAmt, budget: budgetAmt });
     }
     return months;
-  }, [db.expenses, db.budgetRequests, month]);
+  }, [db, month]);
 
-  const pieData = chartData.filter(d => d.spent > 0).map(d => ({ name: d.name, value: d.spent }));
+  const pieData = (chartData || []).filter(d => d.spent > 0).map(d => ({ name: d.name, value: d.spent }));
   const PIE_COLORS = ['#10B981', '#3B82F6', '#6366F1', '#F59E0B', '#EF4444', '#64748B'];
 
   return (
     <div>
       {/* Summary stats */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 16,
-        marginBottom: 24,
-      }}>
-        <StatCard label="Phase Budget"  value={`৳${approved.toLocaleString()}`}  icon={<Target />}       color="#3B82F6" sub="Allocated funds" />
-        <StatCard label="Actual Spend"  value={`৳${spent.toLocaleString()}`}     icon={<ArrowUpRight />} color="#10B981" sub="Total expenditure" />
-        <StatCard label="Available"     value={`৳${remaining.toLocaleString()}`} icon={<Wallet />}       color={remaining < 0 ? '#EF4444' : '#10B981'} sub={remaining < 0 ? 'EXCEEDED' : 'Balance'} />
-        <StatCard label="Utilization"   value={`${util.toFixed(1)}%`}            icon={<Activity />}     color="#6366F1" sub={`${db.expenses.filter(e => e.date.startsWith(month)).length} transactions`} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        <StatCard label="Phase Budget" value={`৳${approved.toLocaleString()}`}  icon={<Target />}       color="#3B82F6" sub="Allocated funds" />
+        <StatCard label="Actual Spend" value={`৳${spent.toLocaleString()}`}     icon={<ArrowUpRight />} color="#10B981" sub="Total expenditure" />
+        <StatCard label="Available"    value={`৳${remaining.toLocaleString()}`} icon={<Wallet />}       color={remaining < 0 ? '#EF4444' : '#10B981'} sub={remaining < 0 ? 'EXCEEDED' : 'Balance'} />
+        <StatCard label="Utilization"  value={`${util.toFixed(1)}%`}            icon={<Activity />}     color="#6366F1" sub={`${(db.expenses || []).filter(e => e.date?.startsWith(month)).length} transactions`} />
       </div>
 
       {/* Charts row */}
@@ -363,244 +274,89 @@ const DashboardContent = ({ chartData, approved, spent, month, db }) => {
   );
 };
 
-// ─── SECTION CONTENT (sub-menu grid) ─────────────────────────────────────────
-const SectionContent = ({ section, setView, pendingCount }) => {
-  const def = SECTIONS[section];
-  if (!def || def.isDashboard) return null;
+// ─── SECTION SUB-MENU GRID ────────────────────────────────────────────────────
+const SectionGrid = ({ section, setView, pendingCount }) => {
+  const items = SECTION_ITEMS[section];
+  if (!items) return null;
 
   return (
-    <div>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: 14,
-      }}>
-        {def.items.map(item => (
-          <SubMenuCard
-            key={item.key}
-            icon={item.icon}
-            label={item.label}
-            description={item.description}
-            color={item.color}
-            onClick={() => setView(item.key)}
-            badge={item.badge ? `${pendingCount} pending` : null}
-          />
-        ))}
-      </div>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gap: 14,
+    }}>
+      {items.map(item => (
+        <SubMenuCard
+          key={item.key}
+          icon={item.icon}
+          label={item.label}
+          description={item.description}
+          color={item.color}
+          onClick={() => setView(item.key)}
+          badge={item.badge ? `${pendingCount} pending` : null}
+        />
+      ))}
     </div>
   );
 };
 
-// ─── MAIN DASHBOARD COMPONENT ─────────────────────────────────────────────────
-const Dashboard = ({ chartData, approved, spent, month, db, setView }) => {
-  const [activeSection, setActiveSection] = useState('dashboard');
+// ─── MAIN EXPORT ──────────────────────────────────────────────────────────────
+// This component renders ONLY the page content (stats + charts OR section grid).
+// It does NOT include a sidebar or layout wrapper — those live in your app shell.
+//
+// Props:
+//   view        – current active view key (e.g. 'dashboard', 'finance', 'clients', ...)
+//   setView     – setter to navigate to a sub-view (e.g. 'add_expense')
+//   chartData   – array of { name, budget, spent }
+//   approved    – number (total approved budget)
+//   spent       – number (total spent)
+//   month       – string 'YYYY-MM'
+//   db          – { expenses: [], budgetRequests: [] }
 
-  const pending = db.budgetRequests?.filter(r => r.status === 'pending').length || 0;
-  const util = approved > 0 ? ((spent / approved) * 100).toFixed(1) : '0.0';
+const Dashboard = ({ view = 'dashboard', setView, chartData = [], approved = 0, spent = 0, month, db = {} }) => {
+  const pendingCount = (db.budgetRequests || []).filter(r => r.status === 'pending').length;
 
-  const currentDef = SECTIONS[activeSection];
-  const pageTitle  = currentDef?.label || 'Dashboard';
+  const SECTION_LABELS = {
+    dashboard:   'Dashboard',
+    finance:     'Finance',
+    clients:     'Client Management',
+    callcenter:  'Call Center',
+    system:      'System',
+  };
+
+  const title = SECTION_LABELS[view] || 'Dashboard';
+  const currentMonth = month || new Date().toISOString().slice(0, 7);
 
   return (
-    <div style={{
-      display: 'flex',
-      height: '100vh',
-      background: '#F8FAFC',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    }}>
-
-      {/* ── SIDEBAR ── */}
-      <aside style={{
-        width: 220,
-        minWidth: 220,
-        background: '#FFF',
-        borderRight: '1px solid #F1F5F9',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '0 10px',
-        boxShadow: '1px 0 0 #F1F5F9',
-      }}>
-
-        {/* Logo */}
-        <div style={{
-          padding: '20px 6px 16px',
-          borderBottom: '1px solid #F1F5F9',
-          marginBottom: 8,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 9,
-            background: 'linear-gradient(135deg,#4F46E5,#7C3AED)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Building2 size={16} color="#FFF" />
-          </div>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', lineHeight: 1 }}>FinanceOS</p>
-            <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Management Suite</p>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 12 }}>
-
-          <NavLabel>Main</NavLabel>
-          <NavItem
-            icon={<Layout />}
-            label="Dashboard"
-            active={activeSection === 'dashboard'}
-            onClick={() => setActiveSection('dashboard')}
-          />
-
-          <NavLabel>Modules</NavLabel>
-          <NavItem
-            icon={<Wallet />}
-            label="Finance"
-            active={activeSection === 'finance'}
-            onClick={() => setActiveSection('finance')}
-            badge={pending}
-          />
-          <NavItem
-            icon={<Users />}
-            label="Clients"
-            active={activeSection === 'clients'}
-            onClick={() => setActiveSection('clients')}
-          />
-          <NavItem
-            icon={<Headphones />}
-            label="Call Center"
-            active={activeSection === 'callcenter'}
-            onClick={() => setActiveSection('callcenter')}
-          />
-
-          <NavLabel>Admin</NavLabel>
-          <NavItem
-            icon={<Layers />}
-            label="System"
-            active={activeSection === 'system'}
-            onClick={() => setActiveSection('system')}
-          />
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          borderTop: '1px solid #F1F5F9',
-          padding: '12px 4px',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '8px 10px', borderRadius: 10,
-          }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: '50%',
-              background: '#EEF2FF',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: '#4F46E5',
-            }}>
-              AD
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', margin: 0 }}>Admin User</p>
-              <p style={{ fontSize: 10, color: '#94A3B8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>admin@company.com</p>
-            </div>
-            <LogOut size={14} color="#CBD5E1" style={{ cursor: 'pointer', flexShrink: 0 }} />
-          </div>
-        </div>
-      </aside>
-
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-        {/* Top bar */}
-        <header style={{
-          background: '#FFF',
-          borderBottom: '1px solid #F1F5F9',
-          padding: '0 28px',
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#CBD5E1' }}>FinanceOS</span>
-            <ChevronRight size={12} color="#CBD5E1" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{pageTitle}</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Utilization chip */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: '#F0FDF4', border: '1px solid #BBF7D0',
-              borderRadius: 20, padding: '4px 12px', fontSize: 12,
-            }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
-              <span style={{ color: '#064E3B', fontWeight: 600 }}>{util}% utilised</span>
-            </div>
-
-            {/* Month chip */}
-            <div style={{
-              background: '#F8FAFC', border: '1px solid #E2E8F0',
-              borderRadius: 20, padding: '4px 12px', fontSize: 12,
-              color: '#64748B', fontWeight: 500,
-            }}>
-              {month}
-            </div>
-
-            {/* Bell */}
-            <div style={{ position: 'relative', cursor: 'pointer' }}>
-              <Bell size={16} color="#94A3B8" />
-              {pending > 0 && (
-                <div style={{
-                  position: 'absolute', top: -4, right: -4,
-                  width: 14, height: 14, borderRadius: '50%',
-                  background: '#EF4444', border: '2px solid #FFF',
-                  fontSize: 8, color: '#FFF', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {pending}
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Scrollable page body */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: '28px' }}>
-
-          {/* Section heading */}
-          <div style={{ marginBottom: 24 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
-              {pageTitle}
-            </h1>
-            <p style={{ fontSize: 13, color: '#94A3B8' }}>
-              {activeSection === 'dashboard'
-                ? `Financial performance overview · ${month}`
-                : `Select an option to get started`}
-            </p>
-          </div>
-
-          {/* Content */}
-          {activeSection === 'dashboard' ? (
-            <DashboardContent
-              chartData={chartData}
-              approved={approved}
-              spent={spent}
-              month={month}
-              db={db}
-            />
-          ) : (
-            <SectionContent
-              section={activeSection}
-              setView={setView}
-              pendingCount={pending}
-            />
-          )}
-        </main>
+    <div>
+      {/* Page heading */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+          {title}
+        </h1>
+        <p style={{ fontSize: 13, color: '#94A3B8' }}>
+          {view === 'dashboard'
+            ? `Financial performance overview · ${currentMonth}`
+            : 'Select an option to get started'}
+        </p>
       </div>
+
+      {/* Content */}
+      {view === 'dashboard' ? (
+        <DashboardHome
+          chartData={chartData}
+          approved={approved}
+          spent={spent}
+          month={currentMonth}
+          db={db}
+        />
+      ) : (
+        <SectionGrid
+          section={view}
+          setView={setView}
+          pendingCount={pendingCount}
+        />
+      )}
     </div>
   );
 };

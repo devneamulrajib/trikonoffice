@@ -1,15 +1,12 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 import { config } from 'dotenv';
+import mysql from 'mysql2/promise';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 config();
-
-const require = createRequire(import.meta.url);
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,7 +95,8 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
   res.json({ message: 'Deleted' });
 });
 
-app.use((req, res) => {
+// Fix: Express 4.21+ requires named wildcard params
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 

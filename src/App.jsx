@@ -56,6 +56,44 @@ const DEFAULT_DB = {
   clients:          [],
 };
 
+// ─── ROLE PERMISSION MAP ──────────────────────────────────────────────────────
+// Lists every view that requires superadmin.
+// Any view NOT listed here is accessible by all logged-in users.
+const SUPERADMIN_ONLY_VIEWS = new Set([
+  'approvals',
+  'budget_request',
+  'reports',
+  'categories',
+  'activity',
+  'manage_users',
+  'clients_manage',
+  'clients_import',
+]);
+
+// ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
+const Forbidden = ({ onBack }) => (
+  <div style={{
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    minHeight: '60vh', gap: 16, textAlign: 'center'
+  }}>
+    <div style={{ fontSize: 48 }}>🔒</div>
+    <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A' }}>Access Restricted</h2>
+    <p style={{ color: '#94A3B8', fontSize: 14 }}>You don't have permission to view this page.</p>
+    <button
+      onClick={onBack}
+      style={{
+        marginTop: 8, padding: '10px 24px',
+        background: 'var(--primary)', color: '#FFF',
+        border: 'none', borderRadius: 10,
+        fontWeight: 600, fontSize: 14, cursor: 'pointer'
+      }}
+    >
+      Go to Dashboard
+    </button>
+  </div>
+);
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 const ClearSuite = () => {
   const [view,   setView]   = useState('dashboard');
@@ -109,7 +147,6 @@ const ClearSuite = () => {
     }));
   };
 
-  // ── Logout ──────────────────────────────────────────────────────────────────
   const handleLogout = () => {
     localStorage.removeItem('clear_session_v6');
     localStorage.removeItem('token');
@@ -118,11 +155,19 @@ const ClearSuite = () => {
     setView('dashboard');
   };
 
-  // ── Login success callback ───────────────────────────────────────────────────
   const handleLoginSuccess = (u) => {
     setUser(u);
     setIsAuth(true);
     setView('dashboard');
+  };
+
+  // ── Safe setView: redirect to dashboard if user lacks permission ─────────────
+  const safeSetView = (v) => {
+    if (SUPERADMIN_ONLY_VIEWS.has(v) && user?.role !== 'superadmin') {
+      setView('dashboard');
+      return;
+    }
+    setView(v);
   };
 
   const approvedBudget = useMemo(() =>
@@ -154,10 +199,14 @@ const ClearSuite = () => {
 
   const pendingCount = db.budgetRequests.filter(r => r.status === 'pending').length;
 
-  // ── Show login if not authenticated ─────────────────────────────────────────
   if (!isAuth) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
   }
+
+  const isSuperAdmin = user?.role === 'superadmin';
+
+  // ── If current view is restricted and user isn't superadmin, show forbidden ─
+  const isViewForbidden = SUPERADMIN_ONLY_VIEWS.has(view) && !isSuperAdmin;
 
   const ccProps = { db, setDb, logAction, user };
 
@@ -167,7 +216,7 @@ const ClearSuite = () => {
 
       <Sidebar
         view={view}
-        setView={setView}
+        setView={safeSetView}
         month={month}
         setMonth={setMonth}
         user={user}
@@ -178,36 +227,39 @@ const ClearSuite = () => {
       <main style={{ marginLeft: 260, flex: 1, padding: '40px 48px', minWidth: 0 }}>
         <AnimatePresence mode="wait">
 
-          {/* ── Core Pages ──────────────────────────────────────────────── */}
-          {view === 'dashboard'      && <Dashboard       key="d"  chartData={chartData} approved={approvedBudget} spent={totalSpent} month={month} db={db} setView={setView} />}
-          {view === 'add_expense'    && <AddExpense       key="ae" db={db} setDb={setDb} selectedMonth={month} logAction={logAction} />}
-          {view === 'budget_request' && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
-          {view === 'budget_history' && <BudgetHistory    key="bh" db={db} setDb={setDb} logAction={logAction} setView={setView} />}
-          {view === 'categories'     && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
-          {view === 'activity'       && <ActivityLog      key="al" db={db} />}
-          {view === 'reports'        && <Reports          key="r"  db={db} selectedMonth={month} />}
-          {view === 'approvals'      && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
-          {view === 'salary_advance' && <SalaryAdvance    key="sa" db={db} setDb={setDb} logAction={logAction} />}
-          {view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
-
-          {/* ── Super Admin Only ────────────────────────────────────────── */}
-          {view === 'manage_users' && user?.role === 'superadmin' && (
-            <ManageUsers key="mu" />
+          {/* ── Forbidden fallback ───────────────────────────────────────── */}
+          {isViewForbidden && (
+            <Forbidden key="forbidden" onBack={() => setView('dashboard')} />
           )}
 
+          {/* ── Core Pages ──────────────────────────────────────────────── */}
+          {!isViewForbidden && view === 'dashboard'      && <Dashboard       key="d"  chartData={chartData} approved={approvedBudget} spent={totalSpent} month={month} db={db} setView={safeSetView} />}
+          {!isViewForbidden && view === 'add_expense'    && <AddExpense       key="ae" db={db} setDb={setDb} selectedMonth={month} logAction={logAction} />}
+          {!isViewForbidden && view === 'salary_advance' && <SalaryAdvance    key="sa" db={db} setDb={setDb} logAction={logAction} />}
+          {!isViewForbidden && view === 'budget_history' && <BudgetHistory    key="bh" db={db} setDb={setDb} logAction={logAction} setView={safeSetView} />}
+          {!isViewForbidden && view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
+
+          {/* ── Superadmin Only ─────────────────────────────────────────── */}
+          {!isViewForbidden && view === 'approvals'      && isSuperAdmin && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
+          {!isViewForbidden && view === 'budget_request' && isSuperAdmin && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
+          {!isViewForbidden && view === 'reports'        && isSuperAdmin && <Reports          key="r"  db={db} selectedMonth={month} />}
+          {!isViewForbidden && view === 'categories'     && isSuperAdmin && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
+          {!isViewForbidden && view === 'activity'       && isSuperAdmin && <ActivityLog      key="al" db={db} />}
+          {!isViewForbidden && view === 'manage_users'   && isSuperAdmin && <ManageUsers      key="mu" />}
+
           {/* ── Call Center ─────────────────────────────────────────────── */}
-          {view === 'call_center'     && <CallCenterHub   key="cch" setView={setView} />}
-          {view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
-          {view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
-          {view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
-          {view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
-          {view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}
-          {view === 'cc_requirements' && <Requirements    key="cc6" {...ccProps} />}
+          {!isViewForbidden && view === 'call_center'     && <CallCenterHub   key="cch" setView={safeSetView} />}
+          {!isViewForbidden && view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_requirements' && <Requirements    key="cc6" {...ccProps} />}
 
           {/* ── Clients ─────────────────────────────────────────────────── */}
-          {view === 'clients'        && <ClientsHub    key="clh" setView={setView} />}
-          {view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
-          {view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
+          {!isViewForbidden && view === 'clients'        && <ClientsHub    key="clh" setView={safeSetView} />}
+          {!isViewForbidden && view === 'clients_manage' && isSuperAdmin && <ManageClients key="clm" {...ccProps} />}
+          {!isViewForbidden && view === 'clients_import' && isSuperAdmin && <ImportClients key="cli" {...ccProps} />}
 
         </AnimatePresence>
       </main>

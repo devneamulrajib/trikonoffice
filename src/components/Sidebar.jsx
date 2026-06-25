@@ -2,7 +2,17 @@ import React from 'react';
 import { LogOut, Zap, Users } from 'lucide-react';
 import NAVITEMS from '../constants/navItems';
 
+// Helper: can this role see this item?
+const canSee = (item, role) => {
+  if (!item.roles) return true;
+  if (item.roles === 'all') return true;
+  if (item.roles === 'superadmin') return role === 'superadmin';
+  if (Array.isArray(item.roles)) return item.roles.includes(role);
+  return true;
+};
+
 const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount }) => {
+  const role = user?.role;
 
   return (
     <aside style={{
@@ -69,6 +79,9 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
       <nav style={{ flex: 1, padding: '0 16px', overflowY: 'auto' }}>
         {NAVITEMS.map((item, idx) => {
 
+          // Skip items this role cannot see
+          if (!canSee(item, role)) return null;
+
           /* ── DIVIDER / SECTION HEADER ── */
           if (item.type === 'divider') {
             return (
@@ -84,10 +97,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
           /* ── GROUP ── */
           if (item.type === 'group') {
-            const isActive =
-              view === item.id ||
-              item.children?.some(c => c.id === view);
-
+            const isActive = view === item.id || item.children?.some(c => c.id === view);
             return (
               <button
                 key={item.id}
@@ -135,8 +145,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           );
         })}
 
-        {/* ── SUPER ADMIN ONLY SECTION ─────────────────────────────────── */}
-        {user?.role === 'superadmin' && (
+        {/* ── SUPER ADMIN ONLY: Manage Users ───────────────────────────── */}
+        {role === 'superadmin' && (
           <>
             <div style={{
               fontSize: 10, fontWeight: 700,
@@ -145,7 +155,6 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             }}>
               Admin
             </div>
-
             <button
               onClick={() => setView('manage_users')}
               className={`nav-link${view === 'manage_users' ? ' active' : ''}`}
@@ -177,15 +186,12 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
               {user?.name || user?.firstName || 'User'}
             </div>
             <div style={{ color: '#64748B', fontSize: 11 }}>
-              {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+              {role === 'superadmin' ? 'Super Admin' : 'User'}
             </div>
           </div>
           <button
             onClick={onLogout}
-            style={{
-              color: '#64748B', background: 'none',
-              border: 'none', cursor: 'pointer'
-            }}
+            style={{ color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.color = '#F43F5E'}
             onMouseLeave={e => e.currentTarget.style.color = '#64748B'}
           >

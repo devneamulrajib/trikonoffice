@@ -4,32 +4,30 @@ import { Zap } from 'lucide-react';
 import GlobalStyles from '../theme/GlobalStyles';
 
 const AuthPage = ({ onLoginSuccess }) => {
-  const [mode, setMode] = useState('signin');
-  const [form, setForm] = useState({ firstName: '', email: '', password: '' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem('clear_users_v6') || '[]');
-      if (mode === 'signup') {
-        users.push(form);
-        localStorage.setItem('clear_users_v6', JSON.stringify(users));
-        setMode('signin');
-        setLoading(false);
-        alert('Account created. Sign in to continue.');
-      } else {
-        const user = users.find(u => u.email === form.email && u.password === form.password);
-        if (user) {
-          localStorage.setItem('clear_session_v6', JSON.stringify(user));
-          onLoginSuccess(user);
-        } else {
-          alert('Invalid credentials.');
-          setLoading(false);
-        }
-      }
-    }, 800);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, password: form.password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Login failed');
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('clear_session_v6', JSON.stringify(data.user));
+      onLoginSuccess(data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,7 +65,7 @@ const AuthPage = ({ onLoginSuccess }) => {
               fontSize: 24, fontWeight: 800,
               color: '#FFF', letterSpacing: '-0.02em'
             }}>
-              Quite Clear
+              Trikon Office
             </span>
           </div>
           <p style={{ color: '#94A3B8', fontSize: 14 }}>Enterprise Financial Suite</p>
@@ -80,56 +78,24 @@ const AuthPage = ({ onLoginSuccess }) => {
           padding: 40,
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
         }}>
-
-          {/* TABS */}
-          <div style={{
-            display: 'flex', gap: 4,
-            background: '#F1F5F9',
-            padding: 4, borderRadius: 12,
-            marginBottom: 32
+          <h2 style={{
+            fontSize: 20, fontWeight: 700,
+            color: '#0F172A', marginBottom: 24, textAlign: 'center'
           }}>
-            {['signin', 'signup'].map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                style={{
-                  flex: 1, padding: '10px',
-                  border: 'none', borderRadius: 8, cursor: 'pointer',
-                  background: mode === m ? '#FFF' : 'transparent',
-                  color: mode === m ? 'var(--zinc-900)' : 'var(--zinc-500)',
-                  fontWeight: 600, fontSize: 13, transition: 'all 0.2s',
-                  boxShadow: mode === m ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
-                }}
-              >
-                {m === 'signin' ? 'Sign In' : 'Sign Up'}
-              </button>
-            ))}
-          </div>
+            Sign In
+          </h2>
 
-          {/* FORM */}
-          <form
-            onSubmit={handleAuth}
-            style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
-          >
-            {mode === 'signup' && (
-              <div>
-                <label style={{
-                  display: 'block', fontSize: 12,
-                  fontWeight: 600, color: 'var(--zinc-500)', marginBottom: 8
-                }}>
-                  Full Name
-                </label>
-                <input
-                  className="input-field"
-                  type="text"
-                  placeholder="John Doe"
-                  required
-                  value={form.firstName}
-                  onChange={e => setForm({ ...form, firstName: e.target.value })}
-                />
-              </div>
-            )}
+          {error && (
+            <div style={{
+              background: '#FEE2E2', color: '#DC2626',
+              padding: '10px 14px', borderRadius: 8,
+              fontSize: 13, marginBottom: 16
+            }}>
+              {error}
+            </div>
+          )}
 
+          <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
               <label style={{
                 display: 'block', fontSize: 12,
@@ -140,7 +106,7 @@ const AuthPage = ({ onLoginSuccess }) => {
               <input
                 className="input-field"
                 type="email"
-                placeholder="you@company.com"
+                placeholder="admin@trikonoffice.com"
                 required
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
@@ -167,10 +133,7 @@ const AuthPage = ({ onLoginSuccess }) => {
             <button
               type="submit"
               className="btn-primary"
-              style={{
-                width: '100%', height: 48,
-                justifyContent: 'center', marginTop: 8
-              }}
+              style={{ width: '100%', height: 48, justifyContent: 'center', marginTop: 8 }}
             >
               {loading
                 ? <div style={{
@@ -180,11 +143,10 @@ const AuthPage = ({ onLoginSuccess }) => {
                     borderRadius: '50%',
                     animation: 'spin 0.6s linear infinite'
                   }} />
-                : (mode === 'signin' ? 'Sign In' : 'Create Account')
+                : 'Sign In'
               }
             </button>
           </form>
-
         </div>
       </motion.div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Zap } from 'lucide-react';
+import { LogOut, Zap, Users } from 'lucide-react';
 import NAVITEMS from '../constants/navItems';
 
 const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount }) => {
@@ -82,10 +82,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             );
           }
 
-          /* ── GROUP — now a flat nav item that opens a landing page ── */
+          /* ── GROUP ── */
           if (item.type === 'group') {
-            // A group is "active" if the current view is the group itself
-            // OR any of its children
             const isActive =
               view === item.id ||
               item.children?.some(c => c.id === view);
@@ -106,7 +104,6 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           /* ── REGULAR NAV ITEM ── */
           return (
             <React.Fragment key={item.id}>
-              {/* Section labels — Core / Finance / System */}
               {(idx === 0 || idx === 3 || idx === 7) && (
                 <div style={{
                   fontSize: 10, fontWeight: 700,
@@ -137,6 +134,28 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             </React.Fragment>
           );
         })}
+
+        {/* ── SUPER ADMIN ONLY SECTION ─────────────────────────────────── */}
+        {user?.role === 'superadmin' && (
+          <>
+            <div style={{
+              fontSize: 10, fontWeight: 700,
+              color: '#475569', textTransform: 'uppercase',
+              padding: '24px 12px 8px', letterSpacing: '0.05em'
+            }}>
+              Admin
+            </div>
+
+            <button
+              onClick={() => setView('manage_users')}
+              className={`nav-link${view === 'manage_users' ? ' active' : ''}`}
+              style={{ marginBottom: 4 }}
+            >
+              <Users size={16} />
+              <span style={{ flex: 1 }}>Manage Users</span>
+            </button>
+          </>
+        )}
       </nav>
 
       {/* ── USER PROFILE ─────────────────────────────────────────────────── */}
@@ -148,16 +167,18 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 800, color: '#FFF', fontSize: 14
           }}>
-            {(user?.firstName || 'U')[0].toUpperCase()}
+            {(user?.name || user?.firstName || 'U')[0].toUpperCase()}
           </div>
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <div style={{
               color: '#FFF', fontSize: 14, fontWeight: 600,
               whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'
             }}>
-              {user?.firstName || 'User'}
+              {user?.name || user?.firstName || 'User'}
             </div>
-            <div style={{ color: '#64748B', fontSize: 11 }}>Administrator</div>
+            <div style={{ color: '#64748B', fontSize: 11 }}>
+              {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+            </div>
           </div>
           <button
             onClick={onLogout}

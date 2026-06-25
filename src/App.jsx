@@ -19,6 +19,7 @@ import ActivityLog     from './pages/ActivityLog';
 import Reports         from './pages/Reports';
 import SalaryAdvance   from './pages/SalaryAdvance';
 import Settings        from './pages/Settings';
+import ManageUsers     from './pages/ManageUsers';
 
 // ─── CALL CENTER PAGES ────────────────────────────────────────────────────────
 import CallCenterHub   from './pages/callcenter/CallCenterHub';
@@ -41,18 +42,18 @@ const DEFAULT_DB = {
     { id: 2, name: 'Marketing',  subs: ['Digital Ads', 'Print'] },
     { id: 3, name: 'HR',         subs: ['Payroll', 'Training'] }
   ],
-  expenses:       [],
-  budgetRequests: [],
-  salaryAdvances: [],
-  members:        [],
-  activityLog:    [],
-  callLogs:        [],
-  callQueue:       [],
-  followUps:       [],
-  transferRequests:[],
-  ccComments:      [],
-  requirements:    [],
-  clients:         [],
+  expenses:         [],
+  budgetRequests:   [],
+  salaryAdvances:   [],
+  members:          [],
+  activityLog:      [],
+  callLogs:         [],
+  callQueue:        [],
+  followUps:        [],
+  transferRequests: [],
+  ccComments:       [],
+  requirements:     [],
+  clients:          [],
 };
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -71,11 +72,11 @@ const ClearSuite = () => {
         ...parsed,
         callLogs:         parsed.callLogs         ?? [],
         callQueue:        parsed.callQueue        ?? [],
-        followUps:        parsed.followUps         ?? [],
-        transferRequests: parsed.transferRequests  ?? [],
-        ccComments:       parsed.ccComments        ?? [],
-        requirements:     parsed.requirements      ?? [],
-        clients:          parsed.clients           ?? [],
+        followUps:        parsed.followUps        ?? [],
+        transferRequests: parsed.transferRequests ?? [],
+        ccComments:       parsed.ccComments       ?? [],
+        requirements:     parsed.requirements     ?? [],
+        clients:          parsed.clients          ?? [],
       };
     }
     return DEFAULT_DB;
@@ -85,9 +86,11 @@ const ClearSuite = () => {
     localStorage.setItem('clear_db_v6', JSON.stringify(db));
   }, [db]);
 
+  // ── Check existing session on load ──────────────────────────────────────────
   useEffect(() => {
     const s = localStorage.getItem('clear_session_v6');
-    if (s) {
+    const t = localStorage.getItem('token');
+    if (s && t) {
       setUser(JSON.parse(s));
       setIsAuth(true);
     }
@@ -96,7 +99,7 @@ const ClearSuite = () => {
   const logAction = (action, type, target) => {
     const entry = {
       id:        Date.now(),
-      user:      user?.firstName || 'User',
+      user:      user?.name || user?.firstName || 'User',
       action, type, target,
       timestamp: new Date().toISOString()
     };
@@ -106,15 +109,20 @@ const ClearSuite = () => {
     }));
   };
 
+  // ── Logout ──────────────────────────────────────────────────────────────────
   const handleLogout = () => {
     localStorage.removeItem('clear_session_v6');
+    localStorage.removeItem('token');
     setIsAuth(false);
     setUser(null);
+    setView('dashboard');
   };
 
+  // ── Login success callback ───────────────────────────────────────────────────
   const handleLoginSuccess = (u) => {
     setUser(u);
     setIsAuth(true);
+    setView('dashboard');
   };
 
   const approvedBudget = useMemo(() =>
@@ -146,6 +154,7 @@ const ClearSuite = () => {
 
   const pendingCount = db.budgetRequests.filter(r => r.status === 'pending').length;
 
+  // ── Show login if not authenticated ─────────────────────────────────────────
   if (!isAuth) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
   }
@@ -169,7 +178,7 @@ const ClearSuite = () => {
       <main style={{ marginLeft: 260, flex: 1, padding: '40px 48px', minWidth: 0 }}>
         <AnimatePresence mode="wait">
 
-          {/* ── Core Pages ────────────────────────────────────────────────── */}
+          {/* ── Core Pages ──────────────────────────────────────────────── */}
           {view === 'dashboard'      && <Dashboard       key="d"  chartData={chartData} approved={approvedBudget} spent={totalSpent} month={month} db={db} setView={setView} />}
           {view === 'add_expense'    && <AddExpense       key="ae" db={db} setDb={setDb} selectedMonth={month} logAction={logAction} />}
           {view === 'budget_request' && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
@@ -181,19 +190,24 @@ const ClearSuite = () => {
           {view === 'salary_advance' && <SalaryAdvance    key="sa" db={db} setDb={setDb} logAction={logAction} />}
           {view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
 
-          {/* ── Call Center Hub + Sub-pages ───────────────────────────────── */}
-          {view === 'call_center'      && <CallCenterHub   key="cch" setView={setView} />}
-          {view === 'cc_new_call'      && <NewCall         key="cc1" {...ccProps} />}
-          {view === 'cc_follow_up'     && <FollowUp        key="cc2" {...ccProps} />}
-          {view === 'cc_transfer'      && <TransferRequest key="cc3" {...ccProps} />}
-          {view === 'cc_comments'      && <Comments        key="cc4" {...ccProps} />}
-          {view === 'cc_call_logs'     && <CallLogs        key="cc5" {...ccProps} />}
-          {view === 'cc_requirements'  && <Requirements    key="cc6" {...ccProps} />}
+          {/* ── Super Admin Only ────────────────────────────────────────── */}
+          {view === 'manage_users' && user?.role === 'superadmin' && (
+            <ManageUsers key="mu" />
+          )}
 
-          {/* ── Clients Hub + Sub-pages ───────────────────────────────────── */}
-          {view === 'clients'          && <ClientsHub      key="clh" setView={setView} />}
-          {view === 'clients_manage'   && <ManageClients   key="clm" {...ccProps} />}
-          {view === 'clients_import'   && <ImportClients   key="cli" {...ccProps} />}
+          {/* ── Call Center ─────────────────────────────────────────────── */}
+          {view === 'call_center'     && <CallCenterHub   key="cch" setView={setView} />}
+          {view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
+          {view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
+          {view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
+          {view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
+          {view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}
+          {view === 'cc_requirements' && <Requirements    key="cc6" {...ccProps} />}
+
+          {/* ── Clients ─────────────────────────────────────────────────── */}
+          {view === 'clients'        && <ClientsHub    key="clh" setView={setView} />}
+          {view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
+          {view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
 
         </AnimatePresence>
       </main>

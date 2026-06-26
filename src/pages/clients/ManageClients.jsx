@@ -1,0 +1,509 @@
+import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Search, Plus, X, Trash2, Edit3, Phone, Mail, MapPin,
+  Building2, Tag, DollarSign, ChevronDown, Users as UsersIcon
+} from 'lucide-react';
+
+// ─── CONSTANTS ──────────────────────────────────────────────────────────────
+const CLIENT_TYPES = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
+
+const STATUS_STYLE = {
+  Lead:        { bg: 'rgba(99,102,241,0.12)',  color: '#6366F1' },
+  Contacted:   { bg: 'rgba(14,165,233,0.12)',  color: '#0EA5E9' },
+  Negotiation: { bg: 'rgba(245,158,11,0.12)',  color: '#F59E0B' },
+  Closed:      { bg: 'rgba(34,197,94,0.12)',   color: '#22C55E' },
+  Lost:        { bg: 'rgba(244,63,94,0.12)',   color: '#F43F5E' },
+};
+
+const STATUS_OPTIONS = Object.keys(STATUS_STYLE);
+
+const SOURCES = ['Referral', 'Walk-in', 'Website', 'Facebook', 'Call Center', 'Agent Network', 'Other'];
+
+const PROPERTY_TYPES = ['Apartment', 'Villa', 'Plot/Land', 'Commercial', 'Office Space', 'Townhouse'];
+
+const emptyClient = () => ({
+  id: Date.now(),
+  name: '',
+  phone: '',
+  email: '',
+  type: 'Buyer',
+  status: 'Lead',
+  source: 'Referral',
+  propertyType: 'Apartment',
+  budgetMin: '',
+  budgetMax: '',
+  location: '',
+  address: '',
+  notes: '',
+  createdAt: new Date().toISOString(),
+});
+
+// ─── BADGE ──────────────────────────────────────────────────────────────────
+const Badge = ({ label, style }) => (
+  <span style={{
+    display: 'inline-flex', alignItems: 'center',
+    padding: '3px 10px', borderRadius: 999,
+    fontSize: 11, fontWeight: 700,
+    background: style?.bg || 'rgba(255,255,255,0.05)',
+    color: style?.color || 'var(--text-muted)',
+    whiteSpace: 'nowrap',
+  }}>
+    {label}
+  </span>
+);
+
+// ─── BUDGET FORMAT ──────────────────────────────────────────────────────────
+const formatBudget = (min, max) => {
+  const fmt = v => {
+    const n = Number(v);
+    if (!n) return null;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
+    return `${n}`;
+  };
+  const a = fmt(min);
+  const b = fmt(max);
+  if (!a && !b) return '—';
+  if (a && b) return `${a} – ${b}`;
+  return a || b;
+};
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+const ManageClients = ({ db, setDb, logAction, user }) => {
+  const clients = db.clients || [];
+
+  const [search, setSearch]   = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  // ── FILTERED LIST ──────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return clients.filter(c => {
+      const q = search.trim().toLowerCase();
+      const matchesSearch = !q ||
+        c.name?.toLowerCase().includes(q) ||
+        c.phone?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.location?.toLowerCase().includes(q);
+      const matchesType = typeFilter === 'All' || c.type === typeFilter;
+      const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
+      return matchesSearch && matchesType && matchesStatus;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [clients, search, typeFilter, statusFilter]);
+
+  // ── STATS ────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    total:   clients.length,
+    leads:   clients.filter(c => c.status === 'Lead').length,
+    active:  clients.filter(c => ['Contacted', 'Negotiation'].includes(c.status)).length,
+    closed:  clients.filter(c => c.status === 'Closed').length,
+  }), [clients]);
+
+  // ── HANDLERS ─────────────────────────────────────────────────────────────
+  const openAdd = () => { setEditing(emptyClient()); setShowModal(true); };
+  const openEdit = (c) => { setEditing({ ...c }); setShowModal(true); };
+
+  const handleSave = () => {
+    if (!editing.name?.trim()) return;
+
+    setDb(prev => {
+      const exists = prev.clients?.some(c => c.id === editing.id);
+      const updated = exists
+        ? prev.clients.map(c => c.id === editing.id ? editing : c)
+        : [editing, ...(prev.clients || [])];
+      return { ...prev, clients: updated };
+    });
+
+    logAction(
+      clients.some(c => c.id === editing.id) ? 'Updated client' : 'Added client',
+      'client',
+      editing.name
+    );
+
+    setShowModal(false);
+    setEditing(null);
+  };
+
+  const handleDelete = (id) => {
+    const target = clients.find(c => c.id === id);
+    setDb(prev => ({ ...prev, clients: prev.clients.filter(c => c.id !== id) }));
+    if (target) logAction('Deleted client', 'client', target.name);
+  };
+
+  const cycleStatus = (id) => {
+    setDb(prev => ({
+      ...prev,
+      clients: prev.clients.map(c => {
+        if (c.id !== id) return c;
+        const idx = STATUS_OPTIONS.indexOf(c.status);
+        const next = STATUS_OPTIONS[(idx + 1) % STATUS_OPTIONS.length];
+        return { ...c, status: next };
+      })
+    }));
+  };
+
+  // ── FIELD UPDATE HELPER ──────────────────────────────────────────────────
+  const set = (key, val) => setEditing(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start',
+        justifyContent: 'space-between', marginBottom: 28, gap: 16, flexWrap: 'wrap'
+      }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+            Clients
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            Manage your buyers, sellers, tenants, landlords and investors
+          </p>
+        </div>
+
+        <button
+          onClick={openAdd}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--primary)', color: '#FFF',
+            border: 'none', borderRadius: 10,
+            padding: '10px 18px', fontSize: 14, fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          <Plus size={16} /> Add Client
+        </button>
+      </div>
+
+      {/* ── STAT CARDS ─────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: 14, marginBottom: 24
+      }}>
+        {[
+          { label: 'Total Clients', value: stats.total,  color: '#6366F1' },
+          { label: 'New Leads',     value: stats.leads,  color: '#0EA5E9' },
+          { label: 'In Progress',   value: stats.active, color: '#F59E0B' },
+          { label: 'Closed Deals',  value: stats.closed, color: '#22C55E' },
+        ].map(s => (
+          <div key={s.label} style={{
+            background: 'var(--surface)', borderRadius: 14,
+            padding: '16px 18px', border: '1px solid var(--border)'
+          }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
+              {s.label}
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>
+              {s.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── FILTER BAR ─────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center'
+      }}>
+        <div style={{
+          flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '10px 14px'
+        }}>
+          <Search size={16} color="var(--text-muted)" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, phone, email, or location..."
+            style={{
+              flex: 1, background: 'none', border: 'none', outline: 'none',
+              color: 'var(--text)', fontSize: 13
+            }}
+          />
+        </div>
+
+        <select
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          style={selectStyle}
+        >
+          <option value="All">All Types</option>
+          {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          style={selectStyle}
+        >
+          <option value="All">All Statuses</option>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* ── CLIENT LIST ────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filtered.length === 0 && (
+          <div style={{
+            textAlign: 'center', padding: '60px 20px',
+            color: 'var(--text-muted)', background: 'var(--surface)',
+            borderRadius: 14, border: '1px solid var(--border)'
+          }}>
+            <UsersIcon size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
+            <p style={{ margin: 0, fontSize: 14 }}>
+              {clients.length === 0
+                ? 'No clients yet. Add your first client or import a list.'
+                : 'No clients match your filters.'}
+            </p>
+          </div>
+        )}
+
+        {filtered.map(c => {
+          const sStyle = STATUS_STYLE[c.status] || {};
+          return (
+            <div key={c.id} style={{
+              display: 'flex', alignItems: 'center', gap: 16,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 14, padding: '16px 18px'
+            }}>
+              {/* Avatar */}
+              <div style={{
+                width: 44, height: 44, borderRadius: 12,
+                background: 'rgba(99,102,241,0.12)', color: '#6366F1',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 16, flexShrink: 0
+              }}>
+                {(c.name || '?')[0].toUpperCase()}
+              </div>
+
+              {/* Main info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                    {c.name}
+                  </span>
+                  <Badge label={c.type} style={{ bg: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }} />
+                </div>
+
+                <div style={{
+                  display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap',
+                  fontSize: 12, color: 'var(--text-muted)'
+                }}>
+                  {c.phone && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Phone size={12} /> {c.phone}
+                    </span>
+                  )}
+                  {c.email && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Mail size={12} /> {c.email}
+                    </span>
+                  )}
+                  {c.location && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <MapPin size={12} /> {c.location}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Property interest */}
+              <div style={{
+                minWidth: 130, textAlign: 'left', flexShrink: 0,
+                display: 'flex', flexDirection: 'column', gap: 4
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <Building2 size={12} /> {c.propertyType}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                  <DollarSign size={12} /> {formatBudget(c.budgetMin, c.budgetMax)}
+                </span>
+              </div>
+
+              {/* Status badge (clickable to cycle) */}
+              <button
+                onClick={() => cycleStatus(c.id)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                title="Click to change status"
+              >
+                <Badge label={c.status} style={sStyle} />
+              </button>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button
+                  onClick={() => openEdit(c)}
+                  style={iconBtnStyle}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                >
+                  <Edit3 size={14} />
+                </button>
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  style={iconBtnStyle}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── MODAL ──────────────────────────────────────────────────────── */}
+      {showModal && editing && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 200, padding: 20
+        }}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 16,
+            padding: 28, width: '100%', maxWidth: 560,
+            maxHeight: '90vh', overflowY: 'auto',
+            border: '1px solid var(--border)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+                {clients.some(c => c.id === editing.id) ? 'Edit Client' : 'Add New Client'}
+              </h2>
+              <button onClick={() => setShowModal(false)} style={iconBtnStyle}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Field label="Full Name *" full>
+                <input value={editing.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder="e.g. Mr. Ahmed Karim" />
+              </Field>
+
+              <Field label="Phone">
+                <input value={editing.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
+              </Field>
+
+              <Field label="Email">
+                <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
+              </Field>
+
+              <Field label="Client Type">
+                <select value={editing.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
+                  {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Status">
+                <select value={editing.status} onChange={e => set('status', e.target.value)} style={inputStyle}>
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Property Type">
+                <select value={editing.propertyType} onChange={e => set('propertyType', e.target.value)} style={inputStyle}>
+                  {PROPERTY_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Source">
+                <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
+                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Budget Min (BDT)">
+                <input type="number" value={editing.budgetMin} onChange={e => set('budgetMin', e.target.value)} style={inputStyle} placeholder="0" />
+              </Field>
+
+              <Field label="Budget Max (BDT)">
+                <input type="number" value={editing.budgetMax} onChange={e => set('budgetMax', e.target.value)} style={inputStyle} placeholder="0" />
+              </Field>
+
+              <Field label="Preferred Location">
+                <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
+              </Field>
+
+              <Field label="Address" full>
+                <input value={editing.address} onChange={e => set('address', e.target.value)} style={inputStyle} placeholder="Full address" />
+              </Field>
+
+              <Field label="Notes" full>
+                <textarea
+                  value={editing.notes}
+                  onChange={e => set('notes', e.target.value)}
+                  style={{ ...inputStyle, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }}
+                  placeholder="Additional notes about this client..."
+                />
+              </Field>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: 'none', border: '1px solid var(--border)',
+                  color: 'var(--text-muted)', cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!editing.name?.trim()}
+                style={{
+                  padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: 'var(--primary)', border: 'none', color: '#FFF',
+                  cursor: editing.name?.trim() ? 'pointer' : 'not-allowed',
+                  opacity: editing.name?.trim() ? 1 : 0.5
+                }}
+              >
+                Save Client
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+// ─── SHARED STYLES ────────────────────────────────────────────────────────────
+const selectStyle = {
+  background: 'var(--surface)', border: '1px solid var(--border)',
+  borderRadius: 10, padding: '10px 14px', fontSize: 13,
+  color: 'var(--text)', cursor: 'pointer', outline: 'none'
+};
+
+const inputStyle = {
+  width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
+  borderRadius: 8, padding: '9px 12px', fontSize: 13,
+  color: 'var(--text)', outline: 'none', boxSizing: 'border-box'
+};
+
+const iconBtnStyle = {
+  width: 30, height: 30, borderRadius: 8,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: 'var(--text-muted)'
+};
+
+// ─── FIELD WRAPPER ────────────────────────────────────────────────────────────
+const Field = ({ label, children, full }) => (
+  <div style={{ gridColumn: full ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
+export default ManageClients;

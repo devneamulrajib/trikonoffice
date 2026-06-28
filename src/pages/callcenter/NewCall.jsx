@@ -5,46 +5,33 @@ import {
   MessageCircle, PhoneCall, Users, User, Calendar, Pencil, Trash2,
   Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
-  ArrowRight, Zap,
+  ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, XCircle,
 } from 'lucide-react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  // Surfaces
-  canvas:      '#0F172A',   // page background
-  nav:         '#1E293B',   // sidebar / nav chrome
-  surface:     '#FFFFFF',
+  canvas:        '#0F172A',
+  nav:           '#1E293B',
+  surface:       '#FFFFFF',
   surfaceRaised: '#F8FAFC',
   surfaceSunken: '#F1F5F9',
-
-  // Borders
-  border:      '#E2E8F0',
-  borderStrong:'#CBD5E1',
-
-  // Text
-  text:        '#0F172A',
-  textMid:     '#475569',
-  textMuted:   '#94A3B8',
-  textInverse: '#FFFFFF',
-
-  // Accent — warm amber, single bold choice
-  accent:      '#F59E0B',
-  accentDark:  '#D97706',
-  accentLight: '#FEF3C7',
-  accentBorder:'#FCD34D',
-
-  // Semantic
+  border:        '#E2E8F0',
+  borderStrong:  '#CBD5E1',
+  text:          '#0F172A',
+  textMid:       '#475569',
+  textMuted:     '#94A3B8',
+  textInverse:   '#FFFFFF',
+  accent:        '#F59E0B',
+  accentDark:    '#D97706',
+  accentLight:   '#FEF3C7',
+  accentBorder:  '#FCD34D',
   green:    '#10B981', greenBg: '#ECFDF5', greenBorder: '#6EE7B7',
   red:      '#EF4444', redBg:   '#FEF2F2', redBorder:   '#FCA5A5',
   blue:     '#3B82F6', blueBg:  '#EFF6FF', blueBorder:  '#BFDBFE',
   yellow:   '#F59E0B', yellowBg:'#FFFBEB', yellowBorder:'#FDE68A',
   purple:   '#8B5CF6', purpleBg:'#F5F3FF', purpleBorder:'#DDD6FE',
   slate:    '#64748B', slateBg: '#F8FAFC', slateBorder: '#E2E8F0',
-
-  // Radius
   r: { xs: 4, sm: 6, md: 8, lg: 12, xl: 16, full: 9999 },
-
-  // Shadow
   shadow: {
     sm: '0 1px 2px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.08)',
     md: '0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05)',
@@ -53,7 +40,6 @@ const C = {
   },
 };
 
-// ─── Source → left-edge colour (the signature element) ───────────────────────
 const SOURCE_ACCENT = {
   Facebook:        '#2563EB',
   'Walk-in':       '#9333EA',
@@ -74,7 +60,6 @@ const SOURCE_PALETTE = {
   Other:           { bg:'#F8FAFC', color:'#64748B', border:'#E2E8F0' },
 };
 
-// ─── Schema ───────────────────────────────────────────────────────────────────
 const CLIENT_TYPES   = ['Buyer','Seller','Tenant','Landlord','Investor'];
 const PURPOSES       = ['Invest','Living','Rent'];
 const STATUS_OPTIONS = ['Lead','Contacted','Negotiation','Closed','Lost'];
@@ -82,11 +67,11 @@ const SOURCES        = ['Referral','Walk-in','Website','Facebook','Call Center',
 const PROPERTY_TYPES = ['Apartment','Villa','Plot/Land','Commercial','Office Space','Townhouse'];
 
 const CALL_OUTCOMES = [
-  { value:'Answered',     label:'Answered',      icon: PhoneIncoming, color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
-  { value:'Busy',         label:'Busy',           icon: PhoneOff,      color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
-  { value:'No Answer',    label:'No Answer',      icon: PhoneMissed,   color: C.yellow, bg: C.yellowBg, border: C.yellowBorder },
-  { value:'Switched Off', label:'Switched Off',   icon: PhoneOff,      color: C.red,    bg: C.redBg,    border: C.redBorder    },
-  { value:'Wrong Number', label:'Wrong Number',   icon: AlertCircle,   color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
+  { value:'Answered',     label:'Answered',    icon: PhoneIncoming, color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
+  { value:'Busy',         label:'Busy',         icon: PhoneOff,      color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
+  { value:'No Answer',    label:'No Answer',    icon: PhoneMissed,   color: C.yellow, bg: C.yellowBg, border: C.yellowBorder },
+  { value:'Switched Off', label:'Switched Off', icon: PhoneOff,      color: C.red,    bg: C.redBg,    border: C.redBorder    },
+  { value:'Wrong Number', label:'Wrong Number', icon: AlertCircle,   color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
 ];
 
 const LEAD_STATUSES = [
@@ -113,9 +98,9 @@ const AVATAR_PALETTE = [
   ['#FCE7F3','#9D174D'],['#E0E7FF','#3730A3'],['#FFEDD5','#9A3412'],
   ['#CCFBF1','#0F766E'],['#FAE8FF','#7E22CE'],
 ];
-const hashStr = s => { let h=0; for (let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; };
+const hashStr = s => { let h=0; for(let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; };
 
-// ─── Low-level primitives ─────────────────────────────────────────────────────
+// ─── Primitives ───────────────────────────────────────────────────────────────
 const Avatar = ({ name, size=32 }) => {
   const initials = (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()).join('')||'?';
   const [bg, fg] = AVATAR_PALETTE[hashStr(name) % AVATAR_PALETTE.length];
@@ -160,8 +145,8 @@ const onFocus = e => { e.target.style.borderColor=C.accent; e.target.style.boxSh
 const onBlur  = e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none'; };
 const focusProps = { onFocus, onBlur };
 
-const Input  = ({ style, ...p }) => <input  style={{ ...inputBase, ...style }} {...focusProps} {...p}/>;
-const Select = ({ children, style, ...p }) => (
+const Input    = ({ style, ...p }) => <input style={{ ...inputBase, ...style }} {...focusProps} {...p}/>;
+const Select   = ({ children, style, ...p }) => (
   <div style={{ position:'relative' }}>
     <select style={{ ...inputBase, paddingRight:30, cursor:'pointer', appearance:'none', ...style }} {...focusProps} {...p}>
       {children}
@@ -173,15 +158,13 @@ const Select = ({ children, style, ...p }) => (
 const Textarea = ({ style, ...p }) => (
   <textarea style={{ ...inputBase, resize:'vertical', minHeight:80, lineHeight:1.6, ...style }} {...focusProps} {...p}/>
 );
-
-const ROField = ({ value }) => (
+const ROField  = ({ value }) => (
   <div style={{ ...inputBase, background:C.surfaceSunken, color:C.textMid, cursor:'default',
     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
     {value||'—'}
   </div>
 );
 
-// Amber primary button
 const PrimaryBtn = ({ children, onClick, style, disabled, ...p }) => (
   <button onClick={onClick} disabled={disabled} style={{
     display:'inline-flex', alignItems:'center', gap:7, padding:'10px 20px',
@@ -215,9 +198,9 @@ const GhostBtn = ({ children, onClick, style }) => (
 
 const IconAction = ({ icon: Icon, onClick, title, variant='default' }) => {
   const variants = {
-    default:  { bg:'#F1F5F9', color:'#475569', hoverBg:'#E2E8F0' },
-    danger:   { bg:'#FEF2F2', color:C.red,     hoverBg:'#FEE2E2' },
-    primary:  { bg:`linear-gradient(135deg,${C.accentDark},${C.accent})`, color:'#fff', hoverBg:null },
+    default: { bg:'#F1F5F9', color:'#475569' },
+    danger:  { bg:'#FEF2F2', color:C.red },
+    primary: { bg:`linear-gradient(135deg,${C.accentDark},${C.accent})`, color:'#fff' },
   };
   const v = variants[variant];
   return (
@@ -236,7 +219,6 @@ const IconAction = ({ icon: Icon, onClick, title, variant='default' }) => {
   );
 };
 
-// Card shell
 const Card = ({ children, style }) => (
   <div style={{ background:C.surface, border:`1px solid ${C.border}`,
     borderRadius:C.r.lg, padding:20, boxShadow:C.shadow.sm, ...style }}>
@@ -260,7 +242,6 @@ const CardHeader = ({ icon: Icon, title, subtitle, action }) => (
   </div>
 );
 
-// Inline toggle switch
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{
     width:40, height:22, borderRadius:C.r.full, cursor:'pointer', flexShrink:0,
@@ -274,7 +255,6 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-// Collapsible section
 const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -282,8 +262,7 @@ const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) =
       <button onClick={()=>setOpen(o=>!o)} style={{
         width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center',
         padding:'12px 16px', background:open?C.surfaceRaised:C.surface,
-        border:'none', cursor:'pointer', textAlign:'left',
-        transition:'background .12s',
+        border:'none', cursor:'pointer', textAlign:'left', transition:'background .12s',
       }}>
         <span style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
           {Icon && <Icon size={14} style={{ color:C.textMuted, flexShrink:0 }}/>}
@@ -299,7 +278,6 @@ const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) =
   );
 };
 
-// Pill header label (used in modal gradient header)
 const HeaderPill = ({ children }) => (
   <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 9px', borderRadius:C.r.full,
     fontSize:11, fontWeight:600, background:'rgba(255,255,255,.18)', color:'rgba(255,255,255,.95)',
@@ -308,12 +286,11 @@ const HeaderPill = ({ children }) => (
   </span>
 );
 
-// ─── Call Outcome Picker ──────────────────────────────────────────────────────
 const OutcomePicker = ({ value, onChange }) => (
   <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:7 }}>
     {CALL_OUTCOMES.map(o => {
       const active = value === o.value;
-      const Icon = o.icon;
+      const Icon   = o.icon;
       return (
         <button key={o.value} onClick={()=>onChange(o.value)} style={{
           padding:'10px 6px', border:`2px solid ${active?o.color:C.border}`,
@@ -329,7 +306,6 @@ const OutcomePicker = ({ value, onChange }) => (
   </div>
 );
 
-// ─── Lead Status Chips ────────────────────────────────────────────────────────
 const LeadStatusPicker = ({ value, onChange }) => (
   <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
     {LEAD_STATUSES.map(s => {
@@ -349,7 +325,6 @@ const LeadStatusPicker = ({ value, onChange }) => (
   </div>
 );
 
-// ─── Contact Method Chips ─────────────────────────────────────────────────────
 const MethodPicker = ({ value, onChange }) => (
   <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
     {CONTACT_METHODS.map(m => {
@@ -369,15 +344,68 @@ const MethodPicker = ({ value, onChange }) => (
   </div>
 );
 
-// ─── Grid helper ─────────────────────────────────────────────────────────────
 const Grid = ({ cols='1fr 1fr', gap=13, children, style }) => (
   <div style={{ display:'grid', gridTemplateColumns:cols, gap, ...style }}>{children}</div>
 );
 
+// ─── Dashboard Stat Box ───────────────────────────────────────────────────────
+// Used for both the "summary" top row and the "source breakdown" row
+const StatBox = ({ icon: Icon, label, value, color, bg, border, active, onClick, dot, sublabel }) => {
+  const [hov, setHov] = useState(false);
+  const isClickable = Boolean(onClick);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={()=>isClickable&&setHov(true)}
+      onMouseLeave={()=>isClickable&&setHov(false)}
+      style={{
+        display:'flex', flexDirection:'column', alignItems:'flex-start', gap:2,
+        padding:'13px 16px',
+        background: active ? bg : hov ? bg : C.surface,
+        border:`1.5px solid ${active ? color : hov ? border : C.border}`,
+        borderRadius:C.r.lg,
+        cursor:isClickable?'pointer':'default',
+        textAlign:'left',
+        transition:'all .15s',
+        boxShadow: active ? `0 2px 12px ${color}22` : hov ? `0 1px 6px ${color}18` : C.shadow.sm,
+        flex:1,
+        minWidth:0,
+      }}
+    >
+      <div style={{ display:'flex', alignItems:'center', gap:7, width:'100%', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          {dot && (
+            <span style={{ width:8, height:8, borderRadius:'50%', background:color, flexShrink:0, display:'block' }}/>
+          )}
+          {Icon && !dot && (
+            <div style={{ width:28, height:28, borderRadius:C.r.sm, background:bg||C.surfaceRaised,
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <Icon size={13} color={color||C.textMuted}/>
+            </div>
+          )}
+          <span style={{ fontSize:11, fontWeight:700, color: active ? color : C.textMuted,
+            textTransform:'uppercase', letterSpacing:'.06em', whiteSpace:'nowrap' }}>
+            {label}
+          </span>
+        </div>
+        {active && (
+          <span style={{ width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }}/>
+        )}
+      </div>
+      <div style={{ fontSize:22, fontWeight:800, color: active ? color : C.text, lineHeight:1, marginTop:4 }}>
+        {value}
+      </div>
+      {sublabel && (
+        <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{sublabel}</div>
+      )}
+    </button>
+  );
+};
+
 // ─── Client Form Modal ────────────────────────────────────────────────────────
 const ClientFormModal = ({ onClose, onSave, client }) => {
   const isEdit = Boolean(client);
-  const [form, setForm] = useState({ ...emptyClient(), ...(client||{}) });
+  const [form, setForm]   = useState({ ...emptyClient(), ...(client||{}) });
   const [errors, setErrors] = useState({});
 
   const set = (k, v) => { setForm(p=>({...p,[k]:v})); if(errors[k]) setErrors(p=>({...p,[k]:false})); };
@@ -404,7 +432,6 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
         style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:680,
           maxHeight:'90vh', overflowY:'auto', boxShadow:C.shadow.xl }}>
 
-        {/* Modal header */}
         <div style={{ padding:'20px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
           borderRadius:`${C.r.xl}px ${C.r.xl}px 0 0`, position:'sticky', top:0, zIndex:10,
           display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -428,8 +455,6 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
         </div>
 
         <div style={{ padding:'22px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-
-          {/* Basic info */}
           <Card>
             <CardHeader icon={Briefcase} title="Basic info" subtitle="Identity and professional background"/>
             <Grid>
@@ -454,7 +479,6 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
             </Grid>
           </Card>
 
-          {/* Contact */}
           <Card>
             <CardHeader icon={Phone} title="Contact info" subtitle="Phone is required; email and alt number are optional"/>
             <Grid>
@@ -475,7 +499,6 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
             </Grid>
           </Card>
 
-          {/* Deal */}
           <Card>
             <CardHeader icon={MapPin} title="Deal info" subtitle="Type, source, property and budget"/>
             <Grid>
@@ -529,7 +552,6 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
             </Grid>
           </Card>
 
-          {/* Requirements */}
           <Card style={{ background:C.surfaceRaised }}>
             <CardHeader icon={LandPlot} title="Requirements" subtitle="What the client is specifically looking for"/>
             <Grid>
@@ -548,14 +570,12 @@ const ClientFormModal = ({ onClose, onSave, client }) => {
             </Grid>
           </Card>
 
-          {/* Notes */}
           <Card>
             <CardHeader icon={MessageCircle} title="Remarks" subtitle="Anything else worth noting"/>
             <Textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Additional notes about this client…"/>
           </Card>
         </div>
 
-        {/* Footer */}
         <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
           borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0,
           display:'flex', justifyContent:'flex-end', gap:10 }}>
@@ -622,7 +642,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
         style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:820,
           maxHeight:'93vh', overflowY:'auto', boxShadow:C.shadow.xl }}>
 
-        {/* Header */}
         <div style={{ padding:'20px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
           borderRadius:`${C.r.xl}px ${C.r.xl}px 0 0`, position:'sticky', top:0, zIndex:10,
           display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -645,8 +664,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
         </div>
 
         <div style={{ padding:'22px 24px', display:'flex', flexDirection:'column', gap:16 }}>
-
-          {/* Quick dial */}
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
             {telLink && (
               <a href={telLink} style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'10px 18px',
@@ -666,7 +683,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
             )}
           </div>
 
-          {/* Client details (collapsed) */}
           <Collapse title="Client details" icon={User}
             summary={[lead.phone,lead.email].filter(Boolean).join(' · ')}>
             <Grid cols="repeat(3,1fr)">
@@ -689,10 +705,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
             {reqSummary && <div style={{ marginTop:14 }}><FieldLabel>Requirements</FieldLabel><ROField value={reqSummary}/></div>}
           </Collapse>
 
-          {/* Two-column content */}
           <Grid cols="1fr 1fr" gap={16}>
-
-            {/* LEFT — what happened */}
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card>
                 <CardHeader icon={PhoneCall} title="Call outcome" subtitle="What happened when you called"/>
@@ -719,7 +732,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
               </Card>
             </div>
 
-            {/* RIGHT — what's next */}
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card>
                 <CardHeader icon={CheckCircle2} title="Lead status" subtitle="Update after this call"/>
@@ -741,7 +753,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                 </div>
               </Card>
 
-              {/* Follow-up */}
               <Card style={{ background:fuOn?'#FFFDF7':C.surface }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:fuOn?16:0 }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
@@ -802,7 +813,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
           </Grid>
         </div>
 
-        {/* Footer */}
         <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
           borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0, zIndex:10,
           display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
@@ -838,6 +848,17 @@ const PageBtn = ({ active, disabled, onClick, children }) => (
   }}>{children}</button>
 );
 
+// ─── Divider with label ───────────────────────────────────────────────────────
+const DividerLabel = ({ children }) => (
+  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 2px' }}>
+    <div style={{ flex:1, height:1, background:C.border }}/>
+    <span style={{ fontSize:10, fontWeight:700, color:C.textMuted, textTransform:'uppercase', letterSpacing:'.08em', whiteSpace:'nowrap' }}>
+      {children}
+    </span>
+    <div style={{ flex:1, height:1, background:C.border }}/>
+  </div>
+);
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 const NewCall = ({ db, setDb, logAction, user }) => {
   const [search,       setSearch]       = useState('');
@@ -850,19 +871,46 @@ const NewCall = ({ db, setDb, logAction, user }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hoveredRow,   setHoveredRow]   = useState(null);
 
-  const allClients = db?.clients || [];
-  const queue = useMemo(() => allClients.filter(c=>!c.calledAt), [allClients]);
+  const allClients = db?.clients  || [];
+  const callLogs   = db?.callLogs  || [];
+  const followUps  = db?.followUps || [];
 
-  const stats = useMemo(() => {
+  // Queue = not yet called
+  const queue = useMemo(() => allClients.filter(c => !c.calledAt), [allClients]);
+
+  // ── Dashboard metrics ──────────────────────────────────────────────────────
+  const metrics = useMemo(() => {
+    const calledClients = allClients.filter(c => c.calledAt);
+
+    // Calls logged (all call log entries)
+    const callsLogged = callLogs.length;
+
+    // Follow-ups sent/scheduled
+    const followupsSent = followUps.length;
+
+    // Closed leads: clients with status 'Closed' (regardless of calledAt)
+    const closedLeads = allClients.filter(c => c.status === 'Closed').length;
+
+    // Dropped / Lost
+    const droppedLeads = allClients.filter(c => c.status === 'Lost').length;
+
+    // Conversion rate: closed / called (with 0 guard)
+    const convRate = calledClients.length > 0
+      ? Math.round((closedLeads / allClients.length) * 100)
+      : 0;
+
+    // By source — count in queue (uncalled)
     const bySource = {};
-    queue.forEach(c => { const s=c.source||'Other'; bySource[s]=(bySource[s]||0)+1; });
-    return { total:queue.length, bySource };
-  }, [queue]);
+    queue.forEach(c => { const s = c.source || 'Other'; bySource[s] = (bySource[s]||0)+1; });
 
+    return { total: queue.length, callsLogged, followupsSent, closedLeads, droppedLeads, convRate, bySource };
+  }, [allClients, queue, callLogs, followUps]);
+
+  // ── Filtered table list ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    let list = sourceFilter==='All' ? queue : queue.filter(c=>c.source===sourceFilter);
+    let list = sourceFilter === 'All' ? queue : queue.filter(c => c.source === sourceFilter);
     if (search.trim()) {
-      const q=search.toLowerCase();
+      const q = search.toLowerCase();
       list = list.filter(c =>
         c.name?.toLowerCase().includes(q) || c.phone?.includes(q) ||
         c.propertyType?.toLowerCase().includes(q) || c.source?.toLowerCase().includes(q) ||
@@ -872,18 +920,18 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     return list;
   }, [queue, search, sourceFilter]);
 
-  const totalPages = Math.max(1,Math.ceil(filtered.length/pageSize));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems  = filtered.slice((page-1)*pageSize, page*pageSize);
 
   const openTakeCall = lead => setActiveLead({
     ...lead, coComment:'', coStatus:'', coMethod:'Call',
     followupDate:'', followupType:'Regular',
-    followupCaller:user?.firstName||'Admin',
+    followupCaller: user?.firstName || 'Admin',
     followupNote:'', callStatus:'New', percentage:0,
   });
-  const updateActive = (k,v) => setActiveLead(p=>({...p,[k]:v}));
+  const updateActive = (k, v) => setActiveLead(p => ({...p,[k]:v}));
 
-  const followupPriorityMap = { Priority:'high','Site Visit':'medium',Regular:'low' };
+  const followupPriorityMap = { Priority:'high', 'Site Visit':'medium', Regular:'low' };
 
   const submitCall = () => {
     if (!activeLead) return;
@@ -924,14 +972,8 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     setActiveLead(null);
   };
 
-  const addClient = c => {
-    setDb(prev=>({...prev,clients:[c,...(prev.clients||[])]}));
-    logAction?.('Added client','Client',c.name);
-  };
-  const editClient = c => {
-    setDb(prev=>({...prev,clients:(prev.clients||[]).map(x=>x.id===c.id?c:x)}));
-    logAction?.('Updated client','Client',c.name);
-  };
+  const addClient    = c => { setDb(prev=>({...prev,clients:[c,...(prev.clients||[])]})); logAction?.('Added client','Client',c.name); };
+  const editClient   = c => { setDb(prev=>({...prev,clients:(prev.clients||[]).map(x=>x.id===c.id?c:x)})); logAction?.('Updated client','Client',c.name); };
   const confirmDelete = () => {
     if (!deleteTarget) return;
     setDb(prev=>({...prev,clients:(prev.clients||[]).filter(c=>c.id!==deleteTarget.id)}));
@@ -943,13 +985,16 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     .filter(p=>Math.abs(p-page)<=2||p===1||p===totalPages)
     .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[]);
 
+  // sources that have at least 1 entry in the queue
+  const activeSources = Object.keys(SOURCE_PALETTE).filter(s => metrics.bySource[s] > 0);
+
   return (
     <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.2}}
       style={{ fontFamily:'-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif', color:C.text }}>
 
       {/* ── Page header ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start',
-        marginBottom:22, flexWrap:'wrap', gap:14 }}>
+        marginBottom:20, flexWrap:'wrap', gap:14 }}>
         <div>
           <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:4 }}>
             <div style={{ width:30, height:30, borderRadius:C.r.sm,
@@ -965,32 +1010,132 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             Clients awaiting first contact — {queue.length} in queue
           </p>
         </div>
-        <PrimaryBtn onClick={()=>setShowAdd(true)} style={{ gap:8 }}>
+        <PrimaryBtn onClick={()=>setShowAdd(true)}>
           <Plus size={15}/> Add client
         </PrimaryBtn>
       </div>
 
-      {/* ── Inline stat chips ── */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:20 }}>
-        <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px',
-          borderRadius:C.r.full, background:C.accentLight, border:`1px solid ${C.accentBorder}`,
-          fontSize:12.5, fontWeight:700, color:C.accentDark }}>
-          <Zap size={12}/> {stats.total} total
-        </div>
-        {Object.entries(SOURCE_PALETTE).map(([src,pal]) => stats.bySource[src]>0 && (
-          <button key={src}
-            onClick={()=>{ setSourceFilter(p=>p===src?'All':src); setPage(1); }}
-            style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 11px',
-              borderRadius:C.r.full, cursor:'pointer', fontSize:12, fontWeight:600,
-              background: sourceFilter===src ? pal.bg : '#fff',
-              color: sourceFilter===src ? pal.color : C.textMid,
-              border:`1.5px solid ${sourceFilter===src ? pal.border : C.border}`,
-              transition:'all .12s' }}>
-            <span style={{ width:7, height:7, borderRadius:'50%', background:SOURCE_ACCENT[src], flexShrink:0 }}/>
-            {src} <strong>{stats.bySource[src]}</strong>
-          </button>
-        ))}
+      {/* ══════════════════════════════════════════════════════════════════════
+          ── ROW 1: Key metrics ──────────────────────────────────────────────
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:10 }}>
+
+        {/* Total in queue */}
+        <StatBox
+          icon={Phone}
+          label="In Queue"
+          value={metrics.total}
+          color={C.accentDark}
+          bg={C.accentLight}
+          border={C.accentBorder}
+          sublabel="Awaiting first call"
+        />
+
+        {/* Calls logged */}
+        <StatBox
+          icon={PhoneCall}
+          label="Calls Logged"
+          value={metrics.callsLogged}
+          color={C.blue}
+          bg={C.blueBg}
+          border={C.blueBorder}
+          sublabel="All time"
+        />
+
+        {/* Follow-ups sent */}
+        <StatBox
+          icon={CalendarClock}
+          label="Follow-ups"
+          value={metrics.followupsSent}
+          color={C.purple}
+          bg={C.purpleBg}
+          border={C.purpleBorder}
+          sublabel="Scheduled"
+        />
+
+        {/* Closed leads */}
+        <StatBox
+          icon={CheckCheck}
+          label="Closed"
+          value={metrics.closedLeads}
+          color={C.green}
+          bg={C.greenBg}
+          border={C.greenBorder}
+          sublabel="Converted leads"
+        />
+
+        {/* Dropped / Lost */}
+        <StatBox
+          icon={XCircle}
+          label="Dropped"
+          value={metrics.droppedLeads}
+          color={C.red}
+          bg={C.redBg}
+          border={C.redBorder}
+          sublabel="Lost leads"
+        />
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          ── ROW 2: Source breakdown (clickable filter chips) ────────────────
+      ══════════════════════════════════════════════════════════════════════ */}
+      {activeSources.length > 0 && (
+        <div style={{ marginBottom:20 }}>
+          <DividerLabel>Filter by source</DividerLabel>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+
+            {/* "All" pill */}
+            <button
+              onClick={()=>{ setSourceFilter('All'); setPage(1); }}
+              style={{
+                display:'inline-flex', alignItems:'center', gap:6, padding:'7px 15px',
+                borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:700,
+                border:`1.5px solid ${sourceFilter==='All' ? C.accentDark : C.border}`,
+                background: sourceFilter==='All' ? C.accentLight : C.surface,
+                color: sourceFilter==='All' ? C.accentDark : C.textMid,
+                boxShadow: sourceFilter==='All' ? `0 1px 6px ${C.accent}33` : 'none',
+                transition:'all .13s',
+              }}>
+              <Zap size={11}/>
+              All sources
+              <strong style={{ marginLeft:3, fontSize:13 }}>{metrics.total}</strong>
+            </button>
+
+            {activeSources.map(src => {
+              const pal    = SOURCE_PALETTE[src] || SOURCE_PALETTE.Other;
+              const accent = SOURCE_ACCENT[src]  || C.textMuted;
+              const active = sourceFilter === src;
+              const count  = metrics.bySource[src] || 0;
+              return (
+                <button key={src}
+                  onClick={()=>{ setSourceFilter(p=>p===src?'All':src); setPage(1); }}
+                  style={{
+                    display:'inline-flex', alignItems:'center', gap:7, padding:'7px 15px',
+                    borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:active?700:600,
+                    border:`1.5px solid ${active ? pal.color : C.border}`,
+                    background: active ? pal.bg : C.surface,
+                    color: active ? pal.color : C.textMid,
+                    boxShadow: active ? `0 1px 6px ${pal.color}33` : 'none',
+                    transition:'all .13s',
+                  }}>
+                  <span style={{ width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0 }}/>
+                  {src}
+                  <span style={{
+                    display:'inline-flex', alignItems:'center', justifyContent:'center',
+                    minWidth:20, height:18, borderRadius:C.r.full, padding:'0 6px',
+                    fontSize:11, fontWeight:800,
+                    background: active ? pal.color : C.surfaceSunken,
+                    color: active ? '#fff' : C.textMid,
+                    marginLeft:1,
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Table card ── */}
       <div style={{ background:C.surface, border:`1px solid ${C.border}`,
@@ -1003,29 +1148,21 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, color:C.textMid }}>
               Show
-              <select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}
+              <select value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); }}
                 style={{ ...inputBase, width:'auto', padding:'5px 9px', fontSize:13, cursor:'pointer', appearance:'none' }}>
                 {[10,25,50,100].map(n=><option key={n}>{n}</option>)}
               </select>
               entries
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, color:C.textMid }}>
-              <Filter size={13}/>
-              <select value={sourceFilter} onChange={e=>{setSourceFilter(e.target.value);setPage(1);}}
-                style={{ ...inputBase, width:'auto', padding:'5px 9px', fontSize:13, cursor:'pointer', appearance:'none' }}>
-                <option value="All">All sources</option>
-                {Object.keys(SOURCE_PALETTE).map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 13px',
             background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:C.r.md }}>
             <Search size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
-            <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}
+            <input value={search} onChange={e=>{ setSearch(e.target.value); setPage(1); }}
               placeholder="Search name, phone, property…"
-              style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:210 }}/>
+              style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:220 }}/>
             {search && (
-              <button onClick={()=>{setSearch('');setPage(1);}} style={{ background:'none', border:'none',
+              <button onClick={()=>{ setSearch(''); setPage(1); }} style={{ background:'none', border:'none',
                 color:C.textMuted, cursor:'pointer', padding:0, display:'flex' }}>
                 <X size={12}/>
               </button>
@@ -1039,13 +1176,13 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             <thead>
               <tr style={{ background:C.surfaceRaised }}>
                 {[
-                  {label:'Client',  align:'left'},
-                  {label:'Phone',   align:'left'},
-                  {label:'Property',align:'left'},
-                  {label:'Source',  align:'left'},
-                  {label:'Type',    align:'left'},
-                  {label:'Added',   align:'left'},
-                  {label:'Actions', align:'center'},
+                  {label:'Client',   align:'left'},
+                  {label:'Phone',    align:'left'},
+                  {label:'Property', align:'left'},
+                  {label:'Source',   align:'left'},
+                  {label:'Type',     align:'left'},
+                  {label:'Added',    align:'left'},
+                  {label:'Actions',  align:'center'},
                 ].map(h => (
                   <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
                     fontSize:10.5, fontWeight:700, color:C.textMuted,
@@ -1057,7 +1194,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
               </tr>
             </thead>
             <tbody>
-              {pageItems.length===0 ? (
+              {pageItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
                     <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
@@ -1068,28 +1205,26 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                       No clients in the queue
                     </div>
                     <div style={{ fontSize:13, opacity:.7 }}>
-                      {allClients.length===0
+                      {allClients.length === 0
                         ? 'Add a client or import a list to get started.'
-                        : 'All clients have been called, or adjust your search.'}
+                        : 'All clients have been called, or adjust your search / filter.'}
                     </div>
                   </td>
                 </tr>
-              ) : pageItems.map((item,i) => {
-                const srcColor = SOURCE_ACCENT[item.source]||C.textMuted;
-                const hovered  = hoveredRow===item.id;
+              ) : pageItems.map((item, i) => {
+                const srcColor = SOURCE_ACCENT[item.source] || C.textMuted;
+                const hovered  = hoveredRow === item.id;
                 return (
                   <tr key={item.id}
                     onMouseEnter={()=>setHoveredRow(item.id)}
                     onMouseLeave={()=>setHoveredRow(null)}
                     style={{
-                      background:hovered ? '#FFFDF5' : i%2?C.surfaceRaised:'transparent',
-                      transition:'background .1s', position:'relative',
+                      background: hovered ? '#FFFDF5' : i%2 ? C.surfaceRaised : 'transparent',
+                      transition:'background .1s',
                     }}>
-                    {/* Signature left-edge urgency bar */}
                     <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`,
                       maxWidth:240, paddingLeft:0 }}>
                       <div style={{ display:'flex', alignItems:'center' }}>
-                        {/* The left-edge colour strip */}
                         <div style={{ width:3, height:44, flexShrink:0, borderRadius:2,
                           background:srcColor, marginRight:13, opacity:.85 }}/>
                         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -1100,7 +1235,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                               {item.name}
                             </div>
                             <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>
-                              {item.company||`#${item.id}`}
+                              {item.company || `#${item.id}`}
                             </div>
                           </div>
                         </div>
@@ -1108,18 +1243,18 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                       borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                      {item.phone||<span style={{ color:C.textMuted }}>—</span>}
+                      {item.phone || <span style={{ color:C.textMuted }}>—</span>}
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                       borderBottom:`1px solid ${C.border}99` }}>
-                      {item.propertyType||<span style={{ color:C.textMuted }}>—</span>}
+                      {item.propertyType || <span style={{ color:C.textMuted }}>—</span>}
                     </td>
                     <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
                       {item.source ? <SourceTag source={item.source}/> : <span style={{ color:C.textMuted }}>—</span>}
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                       borderBottom:`1px solid ${C.border}99` }}>
-                      {item.type||'—'}
+                      {item.type || '—'}
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
                       borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
@@ -1128,9 +1263,9 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                     <td style={{ padding:'11px 16px', textAlign:'center',
                       borderBottom:`1px solid ${C.border}99` }}>
                       <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
-                        <IconAction icon={Phone}  onClick={()=>openTakeCall(item)} title="Take call"   variant="primary"/>
-                        <IconAction icon={Pencil} onClick={()=>setEditTarget(item)} title="Edit"        variant="default"/>
-                        <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"   variant="danger"/>
+                        <IconAction icon={Phone}  onClick={()=>openTakeCall(item)}    title="Take call" variant="primary"/>
+                        <IconAction icon={Pencil} onClick={()=>setEditTarget(item)}   title="Edit"      variant="default"/>
+                        <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"    variant="danger"/>
                       </div>
                     </td>
                   </tr>
@@ -1146,7 +1281,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           borderTop:`1px solid ${C.border}`, background:C.surfaceRaised }}>
           <span style={{ fontSize:12.5, color:C.textMuted }}>
             Showing {filtered.length===0?0:(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {filtered.length}
-            {filtered.length!==queue.length ? ` (filtered from ${queue.length})` : ''}
+            {filtered.length !== queue.length ? ` (filtered from ${queue.length})` : ''}
           </span>
           <div style={{ display:'flex', gap:4, alignItems:'center' }}>
             <PageBtn disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
@@ -1166,7 +1301,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {showAdd      && <ClientFormModal key="add"  onClose={()=>setShowAdd(false)}  onSave={addClient}/>}
+        {showAdd      && <ClientFormModal key="add"  onClose={()=>setShowAdd(false)}    onSave={addClient}/>}
         {editTarget   && <ClientFormModal key="edit" client={editTarget} onClose={()=>setEditTarget(null)} onSave={editClient}/>}
         {deleteTarget && <DeleteConfirmModal key="del" client={deleteTarget} onCancel={()=>setDeleteTarget(null)} onConfirm={confirmDelete}/>}
         {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} user={user}/>}

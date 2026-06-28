@@ -2,11 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search, Plus, X, Trash2, Edit3, Phone, Mail, MapPin,
-  Building2, Tag, DollarSign, ChevronDown, Users as UsersIcon
+  Building2, Tag, DollarSign, ChevronDown, Users as UsersIcon,
+  Briefcase, Home, Compass, LandPlot
 } from 'lucide-react';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const CLIENT_TYPES = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
+const PURPOSES = ['Invest', 'Living', 'Rent'];
 
 const STATUS_STYLE = {
   Lead:        { bg: 'rgba(99,102,241,0.12)',  color: '#6366F1' },
@@ -25,9 +27,14 @@ const PROPERTY_TYPES = ['Apartment', 'Villa', 'Plot/Land', 'Commercial', 'Office
 const emptyClient = () => ({
   id: Date.now(),
   name: '',
+  profession: '',
+  designation: '',
+  company: '',
   phone: '',
+  altPhone: '',
   email: '',
   type: 'Buyer',
+  purpose: '',
   status: 'Lead',
   source: 'Referral',
   propertyType: 'Apartment',
@@ -35,6 +42,9 @@ const emptyClient = () => ({
   budgetMax: '',
   location: '',
   address: '',
+  reqLand: '',
+  reqFlat: '',
+  reqFacing: '',
   notes: '',
   createdAt: new Date().toISOString(),
 });
@@ -87,7 +97,8 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
         c.name?.toLowerCase().includes(q) ||
         c.phone?.toLowerCase().includes(q) ||
         c.email?.toLowerCase().includes(q) ||
-        c.location?.toLowerCase().includes(q);
+        c.location?.toLowerCase().includes(q) ||
+        c.company?.toLowerCase().includes(q);
       const matchesType = typeFilter === 'All' || c.type === typeFilter;
       const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
       return matchesSearch && matchesType && matchesStatus;
@@ -104,7 +115,7 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
 
   // ── HANDLERS ─────────────────────────────────────────────────────────────
   const openAdd = () => { setEditing(emptyClient()); setShowModal(true); };
-  const openEdit = (c) => { setEditing({ ...c }); setShowModal(true); };
+  const openEdit = (c) => { setEditing({ ...emptyClient(), ...c }); setShowModal(true); };
 
   const handleSave = () => {
     if (!editing.name?.trim()) return;
@@ -221,7 +232,7 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, phone, email, or location..."
+            placeholder="Search by name, phone, email, company, or location..."
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
               color: 'var(--text)', fontSize: 13
@@ -267,6 +278,7 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
 
         {filtered.map(c => {
           const sStyle = STATUS_STYLE[c.status] || {};
+          const reqParts = [c.reqLand, c.reqFlat, c.reqFacing].filter(Boolean);
           return (
             <div key={c.id} style={{
               display: 'flex', alignItems: 'center', gap: 16,
@@ -290,12 +302,20 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                     {c.name}
                   </span>
                   <Badge label={c.type} style={{ bg: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }} />
+                  {c.purpose && (
+                    <Badge label={c.purpose} style={{ bg: 'rgba(99,102,241,0.08)', color: '#818CF8' }} />
+                  )}
                 </div>
 
                 <div style={{
                   display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap',
                   fontSize: 12, color: 'var(--text-muted)'
                 }}>
+                  {(c.profession || c.designation) && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Briefcase size={12} /> {[c.profession, c.designation].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                   {c.phone && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Phone size={12} /> {c.phone}
@@ -312,6 +332,23 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                     </span>
                   )}
                 </div>
+
+                {reqParts.length > 0 && (
+                  <div style={{
+                    display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap',
+                    fontSize: 11, color: 'var(--text-muted)'
+                  }}>
+                    {reqParts.map((r, i) => (
+                      <span key={i} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'rgba(255,255,255,0.04)', padding: '2px 8px',
+                        borderRadius: 6
+                      }}>
+                        <LandPlot size={10} /> {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Property interest */}
@@ -369,7 +406,7 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
         }}>
           <div style={{
             background: 'var(--surface)', borderRadius: 16,
-            padding: 28, width: '100%', maxWidth: 560,
+            padding: 28, width: '100%', maxWidth: 600,
             maxHeight: '90vh', overflowY: 'auto',
             border: '1px solid var(--border)'
           }}>
@@ -382,22 +419,55 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {/* ── Basic Info ─────────────────────────────────────────── */}
+            <SectionLabel>Basic Info</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Full Name *" full>
                 <input value={editing.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder="e.g. Mr. Ahmed Karim" />
               </Field>
 
+              <Field label="Profession">
+                <input value={editing.profession} onChange={e => set('profession', e.target.value)} style={inputStyle} placeholder="e.g. Doctor, Engineer" />
+              </Field>
+
+              <Field label="Designation">
+                <input value={editing.designation} onChange={e => set('designation', e.target.value)} style={inputStyle} placeholder="e.g. Senior Manager" />
+              </Field>
+
+              <Field label="Company / Organization" full>
+                <input value={editing.company} onChange={e => set('company', e.target.value)} style={inputStyle} placeholder="e.g. ABC Ltd." />
+              </Field>
+            </div>
+
+            {/* ── Contact Info ───────────────────────────────────────── */}
+            <SectionLabel>Contact Info</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Phone">
                 <input value={editing.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
               </Field>
 
-              <Field label="Email">
-                <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
+              <Field label="Alternative Number">
+                <input value={editing.altPhone} onChange={e => set('altPhone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
               </Field>
 
+              <Field label="Email" full>
+                <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
+              </Field>
+            </div>
+
+            {/* ── Deal Info ──────────────────────────────────────────── */}
+            <SectionLabel>Deal Info</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Client Type">
                 <select value={editing.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
                   {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Purpose">
+                <select value={editing.purpose} onChange={e => set('purpose', e.target.value)} style={inputStyle}>
+                  <option value="">— Not specified —</option>
+                  {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
 
@@ -407,16 +477,20 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                 </select>
               </Field>
 
+              <Field label="Source">
+                <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
+                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+
               <Field label="Property Type">
                 <select value={editing.propertyType} onChange={e => set('propertyType', e.target.value)} style={inputStyle}>
                   {PROPERTY_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
 
-              <Field label="Source">
-                <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
-                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+              <Field label="Preferred Location">
+                <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
               </Field>
 
               <Field label="Budget Min (BDT)">
@@ -427,15 +501,35 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                 <input type="number" value={editing.budgetMax} onChange={e => set('budgetMax', e.target.value)} style={inputStyle} placeholder="0" />
               </Field>
 
-              <Field label="Preferred Location">
-                <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
-              </Field>
-
               <Field label="Address" full>
                 <input value={editing.address} onChange={e => set('address', e.target.value)} style={inputStyle} placeholder="Full address" />
               </Field>
+            </div>
 
-              <Field label="Notes" full>
+            {/* ── Requirements ───────────────────────────────────────── */}
+            <SectionLabel>Requirements</SectionLabel>
+            <div style={{
+              background: 'var(--bg)', border: '1px solid var(--border)',
+              borderRadius: 12, padding: 16, marginBottom: 22,
+              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14
+            }}>
+              <Field label={<><LandPlot size={12} /> Land Requirement</>}>
+                <input value={editing.reqLand} onChange={e => set('reqLand', e.target.value)} style={inputStyle} placeholder="e.g. wants 5 katha land" />
+              </Field>
+
+              <Field label={<><Home size={12} /> Flat Requirement</>}>
+                <input value={editing.reqFlat} onChange={e => set('reqFlat', e.target.value)} style={inputStyle} placeholder="e.g. wants 1500 sft flat" />
+              </Field>
+
+              <Field label={<><Compass size={12} /> Facing Preference</>} full>
+                <input value={editing.reqFacing} onChange={e => set('reqFacing', e.target.value)} style={inputStyle} placeholder="e.g. South faced, Corner plot" />
+              </Field>
+            </div>
+
+            {/* ── Remarks ────────────────────────────────────────────── */}
+            <SectionLabel>Remarks</SectionLabel>
+            <div style={{ marginBottom: 8 }}>
+              <Field label="Notes / Remarks" full>
                 <textarea
                   value={editing.notes}
                   onChange={e => set('notes', e.target.value)}
@@ -496,10 +590,25 @@ const iconBtnStyle = {
   color: 'var(--text-muted)'
 };
 
+// ─── SECTION LABEL (groups fields in the modal) ──────────────────────────────
+const SectionLabel = ({ children }) => (
+  <div style={{
+    fontSize: 12, fontWeight: 800, color: 'var(--primary)',
+    textTransform: 'uppercase', letterSpacing: '0.05em',
+    marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6
+  }}>
+    {children}
+  </div>
+);
+
 // ─── FIELD WRAPPER ────────────────────────────────────────────────────────────
 const Field = ({ label, children, full }) => (
   <div style={{ gridColumn: full ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+    <label style={{
+      fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+      textTransform: 'uppercase', letterSpacing: '0.04em',
+      display: 'flex', alignItems: 'center', gap: 5
+    }}>
       {label}
     </label>
     {children}

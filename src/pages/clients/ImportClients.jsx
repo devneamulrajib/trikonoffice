@@ -6,16 +6,19 @@ import {
 } from 'lucide-react';
 
 // ─── EXPECTED COLUMNS ─────────────────────────────────────────────────────────
-// name (required), phone, email, type, status, source, propertyType,
-// budgetMin, budgetMax, location, address, notes
+// name (required), Profession, Designation, Company/Org, phone, Alternative Number,
+// email, type, Purpose, status, source, propertyType, budgetMin, budgetMax,
+// location, address, Requirments/Land, Requirements/Flat, Requirments/Facing, Remarks
 const REQUIRED_FIELDS = ['name'];
 const TEMPLATE_HEADERS = [
-  'name', 'phone', 'email', 'type', 'status', 'source',
-  'propertyType', 'budgetMin', 'budgetMax', 'location', 'address', 'notes'
+  'name', 'Profession', 'Designation', 'Company/Org', 'phone', 'Alternative Number',
+  'email', 'type', 'Purpose', 'status', 'source', 'propertyType', 'budgetMin', 'budgetMax',
+  'location', 'address', 'Requirments/Land', 'Requirements/Flat', 'Requirments/Facing', 'Remarks'
 ];
 
 const VALID_TYPES   = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
 const VALID_STATUS  = ['Lead', 'Contacted', 'Negotiation', 'Closed', 'Lost'];
+const VALID_PURPOSE = ['Invest', 'Living', 'Rent'];
 
 // ─── CSV PARSER (handles quoted fields, commas inside quotes) ────────────────
 const parseCSV = (text) => {
@@ -88,12 +91,23 @@ const buildClients = (rows) => {
     }
     if (!status) status = 'Lead';
 
+    let purpose = get('purpose');
+    if (purpose && !VALID_PURPOSE.includes(purpose)) {
+      const match = VALID_PURPOSE.find(p => p.toLowerCase() === purpose.toLowerCase());
+      purpose = match || '';
+    }
+
     clients.push({
       id: Date.now() + i,
       name,
+      profession: get('profession'),
+      designation: get('designation'),
+      company: get('company/org'),
       phone: get('phone'),
+      altPhone: get('alternative number'),
       email: get('email'),
       type,
+      purpose,
       status,
       source: get('source') || 'Other',
       propertyType: get('propertytype') || 'Apartment',
@@ -101,7 +115,10 @@ const buildClients = (rows) => {
       budgetMax: get('budgetmax'),
       location: get('location'),
       address: get('address'),
-      notes: get('notes'),
+      reqLand: get('requirments/land'),
+      reqFlat: get('requirements/flat'),
+      reqFacing: get('requirments/facing'),
+      notes: get('remarks') || get('notes'),
       createdAt: new Date().toISOString(),
     });
   });
@@ -113,8 +130,8 @@ const buildClients = (rows) => {
 const downloadTemplate = () => {
   const sample = [
     TEMPLATE_HEADERS.join(','),
-    'Mr. Ahmed Karim,01711000000,ahmed@example.com,Buyer,Lead,Referral,Apartment,5000000,8000000,Gulshan,"House 12, Road 5, Gulshan 1",Looking for 3-bed apartment',
-    'Ms. Farah Hossain,01911222333,farah@example.com,Seller,Contacted,Website,Villa,,,,,Wants to sell within 2 months'
+    'Mr. Ahmed Karim,Doctor,,,01711000000,,ahmed@example.com,Buyer,Invest,Lead,Referral,Apartment,5000000,8000000,Gulshan,"House 12, Road 5, Gulshan 1",wants 5 katha land,wants 1500 sft flat,South faced,Looking for 3-bed apartment',
+    'Ms. Farah Hossain,Advisor,,,01911222333,,farah@example.com,Seller,Living,Contacted,Website,Villa,,,,,,wants 2000 sft flat,Corner plot,Wants to sell within 2 months'
   ].join('\n');
 
   const blob = new Blob([sample], { type: 'text/csv' });
@@ -335,27 +352,33 @@ const ImportClients = ({ db, setDb, logAction, user }) => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {['Name', 'Phone', 'Email', 'Type', 'Status', 'Property', 'Budget'].map(h => (
+                    {['Name', 'Profession', 'Phone', 'Email', 'Type', 'Purpose', 'Status', 'Property', 'Budget', 'Requirements'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.clients.slice(0, 8).map(c => (
-                    <tr key={c.id}>
-                      <td style={tdStyle}>{c.name}</td>
-                      <td style={tdStyle}>{c.phone || '—'}</td>
-                      <td style={tdStyle}>{c.email || '—'}</td>
-                      <td style={tdStyle}>{c.type}</td>
-                      <td style={tdStyle}>{c.status}</td>
-                      <td style={tdStyle}>{c.propertyType}</td>
-                      <td style={tdStyle}>
-                        {c.budgetMin || c.budgetMax
-                          ? `${c.budgetMin || '0'} – ${c.budgetMax || '0'}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
+                  {preview.clients.slice(0, 8).map(c => {
+                    const reqParts = [c.reqLand, c.reqFlat, c.reqFacing].filter(Boolean);
+                    return (
+                      <tr key={c.id}>
+                        <td style={tdStyle}>{c.name}</td>
+                        <td style={tdStyle}>{c.profession || '—'}</td>
+                        <td style={tdStyle}>{c.phone || '—'}</td>
+                        <td style={tdStyle}>{c.email || '—'}</td>
+                        <td style={tdStyle}>{c.type}</td>
+                        <td style={tdStyle}>{c.purpose || '—'}</td>
+                        <td style={tdStyle}>{c.status}</td>
+                        <td style={tdStyle}>{c.propertyType}</td>
+                        <td style={tdStyle}>
+                          {c.budgetMin || c.budgetMax
+                            ? `${c.budgetMin || '0'} – ${c.budgetMax || '0'}`
+                            : '—'}
+                        </td>
+                        <td style={tdStyle}>{reqParts.length ? reqParts.join(' • ') : '—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {preview.clients.length > 8 && (

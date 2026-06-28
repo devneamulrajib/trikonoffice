@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json({ limit: '10mb' })); // shared db blob can get large
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 const authMiddleware = (req, res, next) => {
@@ -40,7 +40,7 @@ async function main() {
     database: process.env.DB_NAME,
   });
 
-  // ── Create users table with permissions column ──────────────────────────
+  // ── users table ─────────────────────────────────────────────────────────
   await db.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,7 +53,7 @@ async function main() {
     )
   `);
 
-  // ── Add permissions column if table already exists without it ───────────
+  // Add permissions column if it doesn't exist yet (idempotent)
   try {
     await db.execute(`ALTER TABLE users ADD COLUMN permissions JSON DEFAULT NULL`);
     console.log('Added permissions column ✅');
@@ -61,14 +61,11 @@ async function main() {
     if (err.code !== 'ER_DUP_FIELDNAME') console.error('Alter table error:', err);
   }
 
-  // ── Create app_data table — single-row shared db blob ──────────────────
-  // One row (id=1) holds the entire frontend db as a JSON blob.
-  // GET /api/data reads it; PUT /api/data overwrites it.
-  // Using MEDIUMTEXT so the blob can grow to ~16 MB before hitting limits.
+  // ── app_data table — single-row shared db blob ───────────────────────────
   await db.execute(`
     CREATE TABLE IF NOT EXISTS app_data (
-      id      INT PRIMARY KEY DEFAULT 1,
-      payload MEDIUMTEXT NOT NULL,
+      id         INT PRIMARY KEY DEFAULT 1,
+      payload    MEDIUMTEXT NOT NULL,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `);
@@ -82,7 +79,7 @@ async function main() {
       if (!email || !password)
         return res.status(400).json({ message: 'Email and password required' });
 
-      // Super admin login (env-based, no DB row)
+      // Superadmin via env (no DB row needed)
       if (
         email    === process.env.SUPER_ADMIN_EMAIL &&
         password === process.env.SUPER_ADMIN_PASSWORD
@@ -106,7 +103,6 @@ async function main() {
 
       const u = rows[0];
 
-      // Parse permissions — stored as JSON string in MySQL
       let permissions = [];
       if (u.permissions) {
         try {
@@ -132,7 +128,7 @@ async function main() {
     }
   });
 
-  // ── CREATE USER (with permissions) ──────────────────────────────────────
+  // ── CREATE USER ──────────────────────────────────────────────────────────
   app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
       const { name, email, password, permissions = [] } = req.body;
@@ -153,7 +149,7 @@ async function main() {
     }
   });
 
-  // ── GET ALL USERS (include permissions) ─────────────────────────────────
+  // ── GET ALL USERS ────────────────────────────────────────────────────────
   app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
       const [rows] = await db.execute(
@@ -204,18 +200,11 @@ async function main() {
   });
 
   // ── GET /api/data — load shared db ──────────────────────────────────────
-  // Any authenticated user can read; the frontend permission system controls
-  // which pages/views each user can actually see.
   app.get('/api/data', authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute('SELECT payload FROM app_data WHERE id = 1');
-      if (!rows.length) {
-        // First ever load — no data saved yet, return empty object so the
-        // frontend falls back to DEFAULT_DB gracefully.
-        return res.json({});
-      }
-      const payload = JSON.parse(rows[0].payload);
-      res.json(payload);
+      if (!rows.length) return res.json({});
+      res.json(JSON.parse(rows[0].payload));
     } catch (err) {
       console.error('GET /api/data error:', err);
       res.status(500).json({ message: 'Server error' });
@@ -223,9 +212,6 @@ async function main() {
   });
 
   // ── PUT /api/data — save shared db ──────────────────────────────────────
-  // Overwrites the single shared row with whatever the client sends.
-  // Uses INSERT … ON DUPLICATE KEY UPDATE so it works on both first write
-  // and all subsequent updates without needing a separate "init" call.
   app.put('/api/data', authMiddleware, async (req, res) => {
     try {
       const payload = JSON.stringify(req.body);

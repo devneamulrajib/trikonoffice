@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, X, Plus, Search, ChevronLeft, ChevronRight, ChevronDown,
   MessageCircle, PhoneCall, Users, User, Calendar, Pencil, Trash2,
-  Briefcase, MapPin, CheckCircle2, Filter, Gift,
+  Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass, LandPlot,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,12 +19,50 @@ const t = {
   space: { xs: 6, sm: 10, md: 14, lg: 20, xl: 28 },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared client schema — MUST mirror ManageClients.jsx / ImportClients.jsx
+// so a client added/imported anywhere looks identical everywhere.
+// ─────────────────────────────────────────────────────────────────────────────
+const CLIENT_TYPES   = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
+const PURPOSES        = ['Invest', 'Living', 'Rent'];
+const STATUS_OPTIONS  = ['Lead', 'Contacted', 'Negotiation', 'Closed', 'Lost'];
+const SOURCES         = ['Referral', 'Walk-in', 'Website', 'Facebook', 'Call Center', 'Agent Network', 'Other'];
+const PROPERTY_TYPES  = ['Apartment', 'Villa', 'Plot/Land', 'Commercial', 'Office Space', 'Townhouse'];
+
+const emptyClient = () => ({
+  id: Date.now(),
+  name: '',
+  profession: '',
+  designation: '',
+  company: '',
+  phone: '',
+  altPhone: '',
+  email: '',
+  type: 'Buyer',
+  purpose: '',
+  status: 'Lead',
+  source: 'Referral',
+  propertyType: 'Apartment',
+  budgetMin: '',
+  budgetMax: '',
+  location: '',
+  address: '',
+  reqLand: '',
+  reqFlat: '',
+  reqFacing: '',
+  notes: '',
+  calledAt: null,
+  createdAt: new Date().toISOString(),
+});
+
 const sourcePalette = {
-  Facebook: { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  WhatsApp: { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  'Walk-in': { bg: '#fdf4ff', color: '#9333ea', border: '#e9d5ff' },
-  Referral: { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa' },
-  Website: { bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
+  Facebook:      { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+  'Walk-in':     { bg: '#fdf4ff', color: '#9333ea', border: '#e9d5ff' },
+  Referral:      { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa' },
+  Website:       { bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
+  'Call Center': { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
+  'Agent Network': { bg: '#fdf2f8', color: '#db2777', border: '#fbcfe8' },
+  Other:         { bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' },
 };
 
 const statusPalette = {
@@ -172,7 +210,7 @@ const Avatar = ({ name, size = 34 }) => {
 };
 
 const Badge = ({ label, palette }) => {
-  const pal = palette[label] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
+  const pal = (palette || {})[label] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
@@ -309,24 +347,14 @@ const CollapsibleSection = ({ title, icon, defaultOpen = false, summary, childre
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Add / Edit Client Modal — same modal handles both flows
+// Add / Edit Client Modal — now mirrors the exact same field set used in
+// Manage Clients & Import Clients (Basic Info / Contact Info / Deal Info /
+// Requirements / Remarks) so a client looks identical no matter where it
+// was created.
 // ─────────────────────────────────────────────────────────────────────────────
-const ClientFormModal = ({ onClose, onSave, user, client }) => {
+const ClientFormModal = ({ onClose, onSave, client }) => {
   const isEdit = Boolean(client);
-
-  const [form, setForm] = useState({
-    name: client?.name || '',
-    mobile: client?.mobile || '',
-    email: client?.email || '',
-    dob: client?.dob || '',
-    project: client?.project || '',
-    source: client?.source || 'Facebook',
-    creator: client?.creator || user?.firstName || 'Admin',
-    cr: client?.cr || 'CR or SR',
-    address: client?.address || '',
-    profession: client?.profession || 'Unknown',
-    area: client?.area || 'Ababor',
-  });
+  const [form, setForm] = useState({ ...emptyClient(), ...(client || {}) });
   const [errors, setErrors] = useState({});
 
   const set = (k, v) => {
@@ -336,18 +364,18 @@ const ClientFormModal = ({ onClose, onSave, user, client }) => {
 
   const handleSubmit = () => {
     const e = {};
-    if (!form.name) e.name = true;
-    if (!form.mobile) e.mobile = true;
+    if (!form.name?.trim()) e.name = true;
+    if (!form.phone?.trim()) e.phone = true;
     if (Object.keys(e).length) { setErrors(e); return; }
 
     if (isEdit) {
       onSave({ ...client, ...form });
     } else {
       onSave({
-        id: Date.now(),
         ...form,
-        createdAt: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-        timestamp: new Date().toISOString(),
+        id: Date.now(),
+        calledAt: null,
+        createdAt: new Date().toISOString(),
       });
     }
     onClose();
@@ -376,7 +404,7 @@ const ClientFormModal = ({ onClose, onSave, user, client }) => {
         style={{
           background: 'var(--bg-card, #ffffff)',
           borderRadius: t.radius.xl,
-          width: '100%', maxWidth: 680,
+          width: '100%', maxWidth: 700,
           maxHeight: '90vh', overflowY: 'auto',
           boxShadow: t.shadow.lg,
           border: '1px solid var(--border, #e2e8f0)',
@@ -388,6 +416,7 @@ const ClientFormModal = ({ onClose, onSave, user, client }) => {
           padding: '18px 24px',
           background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
           borderRadius: `${t.radius.xl}px ${t.radius.xl}px 0 0`,
+          position: 'sticky', top: 0, zIndex: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -422,110 +451,157 @@ const ClientFormModal = ({ onClose, onSave, user, client }) => {
           </button>
         </div>
 
-        {/* ── Form Body — grouped into clearly labelled cards ── */}
+        {/* ── Form Body — grouped to match Manage Clients / Import Clients ── */}
         <div style={{ padding: '22px 24px' }}>
-          <SectionCard>
-            <SectionHeader icon={<Briefcase size={15} />} title="Project Details" description="Where this lead came from" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <Label>Project</Label>
-                <Input value={form.project} onChange={e => set('project', e.target.value)} placeholder="Project name" />
-              </div>
-              <div>
-                <Label>Source</Label>
-                <Sel value={form.source} onChange={e => set('source', e.target.value)}>
-                  <option>Facebook</option>
-                  <option>WhatsApp</option>
-                  <option>Walk-in</option>
-                  <option>Referral</option>
-                  <option>Website</option>
-                  <option>Other</option>
-                </Sel>
-              </div>
-              <div>
-                <Label>Creator</Label>
-                <Input value={form.creator} onChange={e => set('creator', e.target.value)} />
-              </div>
-              <div>
-                <Label>CR</Label>
-                <Sel value={form.cr} onChange={e => set('cr', e.target.value)}>
-                  <option>CR or SR</option>
-                  <option>CR</option>
-                  <option>SR</option>
-                </Sel>
-              </div>
-            </div>
-          </SectionCard>
 
-          <div style={{ height: 14 }} />
-
+          {/* Basic Info */}
           <SectionCard>
-            <SectionHeader icon={<User size={15} />} title="Contact Details" description="Name and mobile are required" />
+            <SectionHeader icon={<Briefcase size={15} />} title="Basic Info" description="Who this client is" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <Label required>Name</Label>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Label required>Full Name</Label>
                 <input
                   value={form.name}
                   onChange={e => set('name', e.target.value)}
-                  placeholder="Full name"
+                  placeholder="e.g. Mr. Ahmed Karim"
                   style={{ ...base, ...(errors.name ? errStyle : {}) }}
                   {...fieldFocus}
                 />
                 {errors.name && <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>Required</p>}
               </div>
               <div>
-                <Label required>Mobile</Label>
-                <input
-                  value={form.mobile}
-                  onChange={e => set('mobile', e.target.value)}
-                  placeholder="880..."
-                  style={{ ...base, ...(errors.mobile ? errStyle : {}) }}
-                  {...fieldFocus}
-                />
-                {errors.mobile && <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>Required</p>}
+                <Label>Profession</Label>
+                <Input value={form.profession} onChange={e => set('profession', e.target.value)} placeholder="e.g. Doctor, Engineer" />
               </div>
               <div>
-                <Label>Email</Label>
-                <Input value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@example.com" />
+                <Label>Designation</Label>
+                <Input value={form.designation} onChange={e => set('designation', e.target.value)} placeholder="e.g. Senior Manager" />
               </div>
-              <div>
-                <Label>Date</Label>
-                <input type="date" value={form.dob} onChange={e => set('dob', e.target.value)}
-                  style={base} {...fieldFocus} />
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Label>Company / Organization</Label>
+                <Input value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. ABC Ltd." />
               </div>
             </div>
           </SectionCard>
 
           <div style={{ height: 14 }} />
 
+          {/* Contact Info */}
           <SectionCard>
-            <SectionHeader icon={<MapPin size={15} />} title="Additional Details" />
-            <div style={{ marginBottom: 14 }}>
-              <Label>Address</Label>
-              <Input value={form.address} onChange={e => set('address', e.target.value)} placeholder="Street address" />
-            </div>
+            <SectionHeader icon={<User size={15} />} title="Contact Info" description="Name and phone are required" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <Label>Profession</Label>
-                <Sel value={form.profession} onChange={e => set('profession', e.target.value)}>
-                  <option>Unknown</option>
-                  <option>Business</option>
-                  <option>Service</option>
-                  <option>Student</option>
-                  <option>Other</option>
+                <Label required>Phone</Label>
+                <input
+                  value={form.phone}
+                  onChange={e => set('phone', e.target.value)}
+                  placeholder="01XXXXXXXXX"
+                  style={{ ...base, ...(errors.phone ? errStyle : {}) }}
+                  {...fieldFocus}
+                />
+                {errors.phone && <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>Required</p>}
+              </div>
+              <div>
+                <Label>Alternative Number</Label>
+                <Input value={form.altPhone} onChange={e => set('altPhone', e.target.value)} placeholder="01XXXXXXXXX" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Label>Email</Label>
+                <Input value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@example.com" />
+              </div>
+            </div>
+          </SectionCard>
+
+          <div style={{ height: 14 }} />
+
+          {/* Deal Info */}
+          <SectionCard>
+            <SectionHeader icon={<MapPin size={15} />} title="Deal Info" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <Label>Client Type</Label>
+                <Sel value={form.type} onChange={e => set('type', e.target.value)}>
+                  {CLIENT_TYPES.map(o => <option key={o}>{o}</option>)}
                 </Sel>
               </div>
               <div>
-                <Label>Area</Label>
-                <Sel value={form.area} onChange={e => set('area', e.target.value)}>
-                  <option>Ababor</option>
-                  <option>Dhaka</option>
-                  <option>Chittagong</option>
-                  <option>Sylhet</option>
-                  <option>Other</option>
+                <Label>Purpose</Label>
+                <Sel value={form.purpose} onChange={e => set('purpose', e.target.value)}>
+                  <option value="">— Not specified —</option>
+                  {PURPOSES.map(o => <option key={o}>{o}</option>)}
                 </Sel>
               </div>
+              <div>
+                <Label>Status</Label>
+                <Sel value={form.status} onChange={e => set('status', e.target.value)}>
+                  {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                </Sel>
+              </div>
+              <div>
+                <Label>Source</Label>
+                <Sel value={form.source} onChange={e => set('source', e.target.value)}>
+                  {SOURCES.map(o => <option key={o}>{o}</option>)}
+                </Sel>
+              </div>
+              <div>
+                <Label>Property Type</Label>
+                <Sel value={form.propertyType} onChange={e => set('propertyType', e.target.value)}>
+                  {PROPERTY_TYPES.map(o => <option key={o}>{o}</option>)}
+                </Sel>
+              </div>
+              <div>
+                <Label>Preferred Location</Label>
+                <Input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Gulshan, Dhaka" />
+              </div>
+              <div>
+                <Label>Budget Min (BDT)</Label>
+                <Input type="number" value={form.budgetMin} onChange={e => set('budgetMin', e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <Label>Budget Max (BDT)</Label>
+                <Input type="number" value={form.budgetMax} onChange={e => set('budgetMax', e.target.value)} placeholder="0" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Label>Address</Label>
+                <Input value={form.address} onChange={e => set('address', e.target.value)} placeholder="Full address" />
+              </div>
             </div>
+          </SectionCard>
+
+          <div style={{ height: 14 }} />
+
+          {/* Requirements */}
+          <SectionCard style={{ background: 'var(--bg-muted, #f8fafc)' }}>
+            <SectionHeader icon={<LandPlot size={15} />} title="Requirements" description="What this client is looking for" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <Label><LandPlot size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Land Requirement</Label>
+                <Input value={form.reqLand} onChange={e => set('reqLand', e.target.value)} placeholder="e.g. wants 5 katha land" />
+              </div>
+              <div>
+                <Label><Home size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Flat Requirement</Label>
+                <Input value={form.reqFlat} onChange={e => set('reqFlat', e.target.value)} placeholder="e.g. wants 1500 sft flat" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Label><Compass size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Facing Preference</Label>
+                <Input value={form.reqFacing} onChange={e => set('reqFacing', e.target.value)} placeholder="e.g. South faced, Corner plot" />
+              </div>
+            </div>
+          </SectionCard>
+
+          <div style={{ height: 14 }} />
+
+          {/* Remarks */}
+          <SectionCard>
+            <SectionHeader icon={<MessageCircle size={15} />} title="Remarks" />
+            <textarea
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              rows={3}
+              placeholder="Additional notes about this client..."
+              style={{ ...base, resize: 'vertical', lineHeight: 1.5 }}
+              {...fieldFocus}
+            />
           </SectionCard>
         </div>
 
@@ -536,6 +612,7 @@ const ClientFormModal = ({ onClose, onSave, user, client }) => {
           borderTop: '1px solid var(--border, #e2e8f0)',
           background: 'var(--bg-muted, #f8fafc)',
           borderRadius: `0 0 ${t.radius.xl}px ${t.radius.xl}px`,
+          position: 'sticky', bottom: 0,
         }}>
           <button onClick={onClose} style={{
             padding: '9px 20px', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
@@ -611,7 +688,7 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
           Delete this client?
         </h3>
         <p style={{ fontSize: 13, color: 'var(--text-muted, #64748b)', margin: 0 }}>
-          <strong>{client?.name}</strong> will be permanently removed from the call queue. This can't be undone.
+          <strong>{client?.name}</strong> will be permanently removed from your client list. This can't be undone.
         </p>
       </div>
       <div style={{
@@ -648,9 +725,9 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Take Call Modal — redesigned as one organised, scrollable flow instead of
-// tabs (most of the old tabs were dead ends with no real content behind them,
-// which was the biggest source of clutter/confusion).
+// Take Call Modal — operates on a client record from db.clients now, with
+// fields mapped to that shape (phone instead of mobile, propertyType instead
+// of project, etc.) but the same UX as before.
 // ─────────────────────────────────────────────────────────────────────────────
 const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
   const [followupEnabled, setFollowupEnabled] = useState(Boolean(lead.followupDate));
@@ -661,8 +738,9 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
     if (!next) onChange('followupDate', '');
   };
 
-  const telLink = lead.mobile ? `tel:${lead.mobile}` : null;
-  const waLink = lead.mobile ? `https://wa.me/${String(lead.mobile).replace(/[^0-9]/g, '')}` : null;
+  const telLink = lead.phone ? `tel:${lead.phone}` : null;
+  const waLink = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g, '')}` : null;
+  const reqSummary = [lead.reqLand, lead.reqFlat, lead.reqFacing].filter(Boolean).join(' • ');
 
   return (
     <motion.div
@@ -706,9 +784,9 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                 {lead.name}
               </h2>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {lead.project && <Pill>{lead.project}</Pill>}
+                {lead.propertyType && <Pill>{lead.propertyType}</Pill>}
                 {lead.source && <Pill>{lead.source}</Pill>}
-                <Pill>{lead.creator || 'Admin'}</Pill>
+                {lead.purpose && <Pill>{lead.purpose}</Pill>}
               </div>
             </div>
           </div>
@@ -733,7 +811,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             {telLink && (
               <a href={telLink} style={actionBtnPrimary}>
-                <PhoneCall size={15} /> Call {lead.mobile}
+                <PhoneCall size={15} /> Call {lead.phone}
               </a>
             )}
             {waLink && (
@@ -747,19 +825,19 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
           <CollapsibleSection
             title="Client details"
             icon={<User size={14} />}
-            summary={`${lead.mobile || 'no mobile'} · ${lead.email || 'no email'}`}
+            summary={`${lead.phone || 'no phone'} · ${lead.email || 'no email'}`}
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
               {[
-                { label: 'Mobile', value: lead.mobile },
+                { label: 'Phone', value: lead.phone },
+                { label: 'Alt. Number', value: lead.altPhone },
                 { label: 'Email', value: lead.email },
-                { label: 'DOB', value: lead.dob },
                 { label: 'Address', value: lead.address },
-                { label: 'Profession', value: lead.profession || 'Unknown' },
-                { label: 'Area', value: lead.area || 'Ababor' },
-                { label: 'Creator', value: lead.creator || 'Admin' },
-                { label: 'CR', value: lead.cr || 'CR or SR' },
-                { label: 'Created At', value: lead.createdAt },
+                { label: 'Profession', value: lead.profession },
+                { label: 'Designation', value: lead.designation },
+                { label: 'Company', value: lead.company },
+                { label: 'Budget', value: (lead.budgetMin || lead.budgetMax) ? `${lead.budgetMin || '0'} – ${lead.budgetMax || '0'}` : '' },
+                { label: 'Location', value: lead.location },
               ].map(f => (
                 <div key={f.label}>
                   <Label>{f.label}</Label>
@@ -767,6 +845,12 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                 </div>
               ))}
             </div>
+            {reqSummary && (
+              <div style={{ marginTop: 14 }}>
+                <Label>Requirements</Label>
+                <ROField value={reqSummary} />
+              </div>
+            )}
           </CollapsibleSection>
 
           <div style={{ height: 16 }} />
@@ -813,7 +897,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
             <SectionHeader
               icon={<Gift size={15} />}
               title="Offer Discussed"
-              description={`Project: ${lead.project || '—'}`}
+              description={`Property: ${lead.propertyType || '—'}`}
             />
             <Label>Offers</Label>
             <Sel value={lead.offers || ''} onChange={e => onChange('offers', e.target.value)}>
@@ -888,7 +972,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
               <div>
                 <Label>Status</Label>
-                <Sel value={lead.status || 'New'} onChange={e => onChange('status', e.target.value)}>
+                <Sel value={lead.callStatus || 'New'} onChange={e => onChange('callStatus', e.target.value)}>
                   <option>New</option>
                   <option>Contacted</option>
                   <option>Interested</option>
@@ -933,10 +1017,10 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
           <CollapsibleSection
             title="More options"
             icon={<Filter size={14} />}
-            summary="Visit scheduling, requirements — coming soon"
+            summary="Visit scheduling — coming soon"
           >
             <p style={{ fontSize: 12.5, color: 'var(--text-muted, #94a3b8)', margin: 0 }}>
-              Visit scheduling and requirement tracking for this lead aren't available yet.
+              Visit scheduling for this lead isn't available yet.
             </p>
           </CollapsibleSection>
         </div>
@@ -1031,7 +1115,11 @@ const StatCard = ({ label, value, color }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main NewCall component
+// Main NewCall component — now reads from db.clients (same source as
+// Manage Clients & Import Clients) instead of a separate callQueue.
+// A client is in the "New Call" queue as long as it has no `calledAt` value.
+// Taking a call sets `calledAt`, which hides it from this queue while it
+// remains fully visible (and editable) in Manage Clients.
 // ─────────────────────────────────────────────────────────────────────────────
 const NewCall = ({ db, setDb, logAction, user }) => {
   const [search, setSearch] = useState('');
@@ -1044,7 +1132,9 @@ const NewCall = ({ db, setDb, logAction, user }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
 
-  const queue = db?.callQueue || [];
+  const allClients = db?.clients || [];
+  // Only clients that haven't been called yet show up in the New Call queue.
+  const queue = useMemo(() => allClients.filter(c => !c.calledAt), [allClients]);
 
   const stats = useMemo(() => {
     const bySource = queue.reduce((acc, item) => {
@@ -1062,10 +1152,11 @@ const NewCall = ({ db, setDb, logAction, user }) => {
       const q = search.toLowerCase();
       list = list.filter(item =>
         item.name?.toLowerCase().includes(q) ||
-        item.mobile?.toLowerCase().includes(q) ||
+        item.phone?.toLowerCase().includes(q) ||
         String(item.id).includes(q) ||
-        item.project?.toLowerCase().includes(q) ||
-        item.source?.toLowerCase().includes(q)
+        item.propertyType?.toLowerCase().includes(q) ||
+        item.source?.toLowerCase().includes(q) ||
+        item.company?.toLowerCase().includes(q)
       );
     }
     return list;
@@ -1079,7 +1170,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     coComment: '', coStatus: 'Busy', coMethod: 'Call',
     followupDate: '', followupType: 'Regular',
     followupCaller: user?.firstName || 'Admin 2',
-    followupNote: '', status: 'New', percentage: 0,
+    followupNote: '', callStatus: 'New', percentage: 0,
   });
   const closeTakeCall = () => setActiveLead(null);
   const updateActiveLead = (field, value) =>
@@ -1094,37 +1185,44 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     const entry = {
       id: Date.now(),
       clientName: activeLead.name,
-      phone: activeLead.mobile,
+      phone: activeLead.phone,
       email: activeLead.email || '',
-      subject: `${activeLead.project || ''} — Lead follow-up`.trim(),
+      subject: `${activeLead.propertyType || ''} — Lead follow-up`.trim(),
       priority: 'medium',
       notes: activeLead.coComment || '',
       agent: user?.firstName || 'Unknown',
       type: 'inbound', duration: 0,
       date: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
       timestamp: new Date().toISOString(),
-      project: activeLead.project,
+      propertyType: activeLead.propertyType,
       source: activeLead.source,
-      status: activeLead.status,
+      callStatus: activeLead.callStatus,
     };
 
     // A follow-up date being set means this call should graduate into the Follow Up list
     const hasFollowup = Boolean(activeLead.followupDate);
+    const calledAtIso = new Date().toISOString();
 
     setDb(prev => {
       const next = {
         ...prev,
         callLogs: [entry, ...(prev.callLogs || [])],
-        callQueue: (prev.callQueue || []).filter(item => item.id !== activeLead.id),
+        // Mark this client as called so it drops out of the New Call queue
+        // while staying fully intact (and visible) in Manage Clients.
+        clients: (prev.clients || []).map(c =>
+          c.id === activeLead.id
+            ? { ...c, calledAt: calledAtIso, status: activeLead.callStatus === 'Converted' ? 'Closed' : c.status }
+            : c
+        ),
       };
 
       if (hasFollowup) {
         const followUpEntry = {
           id: Date.now() + 1,
           client: activeLead.name,
-          phone: activeLead.mobile,
+          phone: activeLead.phone,
           subject: activeLead.followupNote?.trim()
-            || `${activeLead.project || 'Lead'} follow-up (${activeLead.followupType || 'Regular'})`,
+            || `${activeLead.propertyType || 'Lead'} follow-up (${activeLead.followupType || 'Regular'})`,
           dueDate: activeLead.followupDate,
           priority: followupPriorityMap[activeLead.followupType] || 'medium',
           status: 'pending',
@@ -1144,15 +1242,16 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     closeTakeCall();
   };
 
+  // ── Add / Edit / Delete now operate directly on db.clients ──────────────
   const handleAddClient = newClient => {
-    setDb(prev => ({ ...prev, callQueue: [newClient, ...(prev.callQueue || [])] }));
+    setDb(prev => ({ ...prev, clients: [newClient, ...(prev.clients || [])] }));
     logAction?.('Added new client', 'Client', newClient.name);
   };
 
   const handleEditClient = updatedClient => {
     setDb(prev => ({
       ...prev,
-      callQueue: (prev.callQueue || []).map(c => c.id === updatedClient.id ? updatedClient : c),
+      clients: (prev.clients || []).map(c => c.id === updatedClient.id ? updatedClient : c),
     }));
     logAction?.('Updated client', 'Client', updatedClient.name);
   };
@@ -1161,7 +1260,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     if (!deleteTarget) return;
     setDb(prev => ({
       ...prev,
-      callQueue: (prev.callQueue || []).filter(c => c.id !== deleteTarget.id),
+      clients: (prev.clients || []).filter(c => c.id !== deleteTarget.id),
     }));
     logAction?.('Deleted client', 'Client', deleteTarget.name);
     setDeleteTarget(null);
@@ -1192,7 +1291,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             New Calls
           </h1>
           <p style={{ color: 'var(--text-muted, #64748b)', fontSize: 13.5, margin: 0 }}>
-            Manage and take calls from the queue
+            Clients awaiting a first call — synced with your full client list
           </p>
         </div>
         <button
@@ -1291,7 +1390,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search name, mobile, project..."
+              placeholder="Search name, phone, property, company..."
               style={{
                 background: 'none', border: 'none', outline: 'none',
                 fontSize: 13.5, color: 'var(--text, #374151)',
@@ -1306,7 +1405,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--bg-muted, #f8fafc)' }}>
-                {['Client', 'Mobile', 'Project', 'Source', 'CR', 'Created At', 'Actions'].map((h, i) => (
+                {['Client', 'Phone', 'Property', 'Source', 'Type', 'Added', 'Actions'].map((h, i) => (
                   <th key={h} style={{
                     textAlign: i === 6 ? 'center' : 'left',
                     padding: '11px 16px',
@@ -1330,11 +1429,11 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                     color: 'var(--text-muted, #94a3b8)',
                   }}>
                     <Users size={32} style={{ opacity: 0.3, marginBottom: 10, display: 'block', margin: '0 auto 10px' }} />
-                    <p style={{ fontSize: 14, fontWeight: 500, margin: '0 0 6px' }}>No client records found</p>
+                    <p style={{ fontSize: 14, fontWeight: 500, margin: '0 0 6px' }}>No clients waiting for a call</p>
                     <p style={{ fontSize: 13, margin: 0, opacity: 0.7 }}>
-                      {queue.length === 0
-                        ? 'Click "Add New Client" to get started.'
-                        : 'Try a different search term or source filter.'}
+                      {allClients.length === 0
+                        ? 'Click "Add New Client" or import a list to get started.'
+                        : 'Every client has already been called, or try a different search/filter.'}
                     </p>
                   </td>
                 </tr>
@@ -1361,29 +1460,31 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                         }}>
                           {item.name}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>#{item.id}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>
+                          {item.company || `#${item.id}`}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  {/* Mobile */}
+                  {/* Phone */}
                   <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)', whiteSpace: 'nowrap' }}>
-                    {item.mobile}
+                    {item.phone}
                   </td>
-                  {/* Project */}
+                  {/* Property */}
                   <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    {item.project || <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>}
+                    {item.propertyType || <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>}
                   </td>
                   {/* Source */}
                   <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
                     {item.source ? <SourceBadge source={item.source} /> : <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>}
                   </td>
-                  {/* CR */}
+                  {/* Type */}
                   <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    {item.cr || 'CR or SR'}
+                    {item.type || '—'}
                   </td>
-                  {/* Created At */}
+                  {/* Added */}
                   <td style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--text-muted, #64748b)', borderBottom: '1px solid var(--border, #f1f5f9)', whiteSpace: 'nowrap' }}>
-                    {item.createdAt}
+                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
                   </td>
                   {/* Actions */}
                   <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
@@ -1463,7 +1564,6 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             key="add-modal"
             onClose={() => setShowAddModal(false)}
             onSave={handleAddClient}
-            user={user}
           />
         )}
         {editingClient && (
@@ -1472,7 +1572,6 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             client={editingClient}
             onClose={() => setEditingClient(null)}
             onSave={handleEditClient}
-            user={user}
           />
         )}
         {deleteTarget && (

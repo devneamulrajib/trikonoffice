@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ import ClientsHub      from './pages/clients/ClientsHub';
 import ManageClients   from './pages/clients/ManageClients';
 import ImportClients   from './pages/clients/ImportClients';
 
-// ─── DEFAULT DB ───────────────────────────────────────────────────────────────
+// ─── DEFAULT DB (mirrors DEFAULT_APP_DATA in server.js) ───────────────────────
 const DEFAULT_DB = {
   categories: [
     { id: 1, name: 'Operations', subs: ['Rent', 'Utilities'] },
@@ -87,6 +87,10 @@ const VIEW_PERM_MAP = {
   clients_import:   'clients_import',
 };
 
+// ─── DATA SYNC CONFIG ──────────────────────────────────────────────────────────
+const LOCAL_CACHE_KEY = 'clear_db_v6';
+const SYNC_DEBOUNCE_MS = 600; // batch rapid-fire updates into one PUT request
+
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
 const Forbidden = ({ onBack }) => (
   <div style={{
@@ -111,6 +115,38 @@ const Forbidden = ({ onBack }) => (
   </div>
 );
 
+// ─── SYNC STATUS PILL ─────────────────────────────────────────────────────────
+// Small, unobtrusive indicator so users understand whether their data is
+// shared/saved or only cached locally (e.g. if the network drops out).
+const SyncStatus = ({ status }) => {
+  if (status === 'synced') return null; // don't clutter the UI when everything's fine
+
+  const config = {
+    loading: { bg: '#EEF2FF', color: '#6366F1', text: 'Loading shared data…' },
+    saving:  { bg: '#FEF3C7', color: '#B45309', text: 'Saving…' },
+    error:   { bg: '#FEE2E2', color: '#DC2626', text: 'Offline — changes saved locally only' },
+  }[status];
+
+  if (!config) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 18, right: 18, zIndex: 999,
+      background: config.bg, color: config.color,
+      padding: '8px 16px', borderRadius: 999,
+      fontSize: 12.5, fontWeight: 600,
+      boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <span style={{
+        width: 7, height: 7, borderRadius: '50%',
+        background: config.color, flexShrink: 0,
+      }} />
+      {config.text}
+    </div>
+  );
+};
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 const ClearSuite = () => {
   const [view,   setView]   = useState('dashboard');
@@ -118,38 +154,122 @@ const ClearSuite = () => {
   const [user,   setUser]   = useState(null);
   const [month,  setMonth]  = useState(new Date().toISOString().slice(0, 7));
 
-  const [db, setDb] = useState(() => {
-    const s = localStorage.getItem('clear_db_v6');
-    if (s) {
-      const parsed = JSON.parse(s);
-      return {
-        ...DEFAULT_DB,
-        ...parsed,
-        callLogs:         parsed.callLogs         ?? [],
-        callQueue:        parsed.callQueue         ?? [],
-        followUps:        parsed.followUps         ?? [],
-        transferRequests: parsed.transferRequests  ?? [],
-        ccComments:       parsed.ccComments        ?? [],
-        requirements:     parsed.requirements      ?? [],
-        clients:          parsed.clients           ?? [],
-      };
-    }
-    return DEFAULT_DB;
-  });
+  // 'loading' | 'synced' | 'saving' | 'error'
+  const [syncStatus, setSyncStatus] = useState('loading');
+  const [dbLoaded, setDbLoaded] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem('clear_db_v6', JSON.stringify(db));
-  }, [db]);
+  const [db, setDbState] = useState(DEFAULT_DB);
 
-  // ── Restore session on load ──────────────────────────────────────────────
+  // Keep track of the latest db so the debounced sync always sends the
+  // freshest value even if several setDb calls happen in quick succession.
+  const dbRef = useRef(db);
+  dbRef.current = db;
+  const syncTimerRef = useRef(null);
+  const tokenRef = useRef(null);
+
+  // ── Authenticated fetch helper ───────────────────────────────────────────
+  const authedFetch = useCallback((url, options = {}) => {
+    const token = tokenRef.current || localStorage.getItem('token');
+    return fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  }, []);
+
+  // ── Push the current db to the server (debounced) ───────────────────────
+  const syncToServer = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async () => {
+      try {
+        setSyncStatus('saving');
+        const res = await authedFetch('/api/data', {
+          method: 'PUT',
+          body: JSON.stringify(dbRef.current),
+        });
+        if (!res.ok) throw new Error('Save failed');
+        setSyncStatus('synced');
+      } catch (err) {
+        console.error('Sync to server failed, kept locally only:', err);
+        setSyncStatus('error');
+      }
+    }, SYNC_DEBOUNCE_MS);
+  }, [authedFetch]);
+
+  // ── setDb: same call signature everywhere (object or updater fn) ────────
+  // Pages across the app already call setDb(prev => ({...})) or setDb(obj).
+  // This wrapper keeps that exact API so no other page needs to change,
+  // while also caching to localStorage (offline fallback) and syncing the
+  // full db to the server so every logged-in user shares the same data.
+  const setDb = useCallback((update) => {
+    setDbState(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(next));
+      } catch (err) {
+        console.warn('Local cache write failed:', err);
+      }
+      return next;
+    });
+    // Fire the sync after state update is scheduled; dbRef will catch up
+    // on next render, and the debounce window covers the gap.
+    syncToServer();
+  }, [syncToServer]);
+
+  // ── Restore session + load shared data on app start ─────────────────────
   useEffect(() => {
     const s = localStorage.getItem('clear_session_v6');
     const t = localStorage.getItem('token');
     if (s && t) {
+      tokenRef.current = t;
       setUser(JSON.parse(s));
       setIsAuth(true);
     }
   }, []);
+
+  // ── Once authenticated, load the shared db from the server ──────────────
+  useEffect(() => {
+    if (!isAuth) return;
+
+    let cancelled = false;
+
+    const loadData = async () => {
+      setSyncStatus('loading');
+
+      // Show cached local data immediately while the network request runs,
+      // so the UI doesn't flash empty on every load.
+      const cached = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (!cancelled) setDbState({ ...DEFAULT_DB, ...parsed });
+        } catch { /* ignore corrupt cache */ }
+      }
+
+      try {
+        const res = await authedFetch('/api/data');
+        if (!res.ok) throw new Error('Load failed');
+        const serverDb = await res.json();
+        if (cancelled) return;
+
+        const merged = { ...DEFAULT_DB, ...serverDb };
+        setDbState(merged);
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(merged));
+        setSyncStatus('synced');
+      } catch (err) {
+        console.error('Failed to load shared data, using local cache:', err);
+        if (!cancelled) setSyncStatus('error');
+      } finally {
+        if (!cancelled) setDbLoaded(true);
+      }
+    };
+
+    loadData();
+    return () => { cancelled = true; };
+  }, [isAuth, authedFetch]);
 
   const logAction = (action, type, target) => {
     const entry = {
@@ -167,19 +287,23 @@ const ClearSuite = () => {
   const handleLogout = () => {
     localStorage.removeItem('clear_session_v6');
     localStorage.removeItem('token');
+    tokenRef.current = null;
     setIsAuth(false);
     setUser(null);
+    setDbLoaded(false);
+    setDbState(DEFAULT_DB);
     setView('dashboard');
   };
 
   const handleLoginSuccess = (u) => {
+    const t = localStorage.getItem('token');
+    tokenRef.current = t;
     setUser(u);
     setIsAuth(true);
     setView('dashboard');
   };
 
   // ── Permission check for a given view ───────────────────────────────────
-  // Returns true if the current user is allowed to see this view.
   const userCan = (v) => {
     if (!user) return false;
     if (user.role === 'superadmin') return true;
@@ -236,6 +360,28 @@ const ClearSuite = () => {
 
   if (!isAuth) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // ── Wait for the first shared-data load before rendering pages ──────────
+  // Prevents a flash of an empty dashboard before the shared data arrives.
+  if (!dbLoaded) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 14,
+      }}>
+        <GlobalStyles />
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          border: '3px solid var(--border, #e2e8f0)',
+          borderTopColor: 'var(--primary, #6366F1)',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
+        <p style={{ color: 'var(--text-muted, #94A3B8)', fontSize: 13 }}>Loading your workspace…</p>
+      </div>
+    );
   }
 
   const isSuperAdmin = user?.role === 'superadmin';
@@ -298,6 +444,8 @@ const ClearSuite = () => {
 
         </AnimatePresence>
       </main>
+
+      <SyncStatus status={syncStatus} />
     </div>
   );
 };

@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // shared db blob can get large
 app.use(express.static(path.join(__dirname, 'dist')));
 
 const authMiddleware = (req, res, next) => {
@@ -58,9 +58,20 @@ async function main() {
     await db.execute(`ALTER TABLE users ADD COLUMN permissions JSON DEFAULT NULL`);
     console.log('Added permissions column ✅');
   } catch (err) {
-    // Column already exists — ignore
     if (err.code !== 'ER_DUP_FIELDNAME') console.error('Alter table error:', err);
   }
+
+  // ── Create app_data table — single-row shared db blob ──────────────────
+  // One row (id=1) holds the entire frontend db as a JSON blob.
+  // GET /api/data reads it; PUT /api/data overwrites it.
+  // Using MEDIUMTEXT so the blob can grow to ~16 MB before hitting limits.
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_data (
+      id      INT PRIMARY KEY DEFAULT 1,
+      payload MEDIUMTEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
 
   console.log('DB connected ✅');
 
@@ -148,7 +159,6 @@ async function main() {
       const [rows] = await db.execute(
         'SELECT id, name, email, role, permissions, created_at FROM users'
       );
-      // Parse permissions JSON for each user
       const users = rows.map(u => ({
         ...u,
         permissions: (() => {
@@ -189,6 +199,44 @@ async function main() {
       res.json({ message: 'Deleted' });
     } catch (err) {
       console.error('Delete user error:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  // ── GET /api/data — load shared db ──────────────────────────────────────
+  // Any authenticated user can read; the frontend permission system controls
+  // which pages/views each user can actually see.
+  app.get('/api/data', authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute('SELECT payload FROM app_data WHERE id = 1');
+      if (!rows.length) {
+        // First ever load — no data saved yet, return empty object so the
+        // frontend falls back to DEFAULT_DB gracefully.
+        return res.json({});
+      }
+      const payload = JSON.parse(rows[0].payload);
+      res.json(payload);
+    } catch (err) {
+      console.error('GET /api/data error:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  // ── PUT /api/data — save shared db ──────────────────────────────────────
+  // Overwrites the single shared row with whatever the client sends.
+  // Uses INSERT … ON DUPLICATE KEY UPDATE so it works on both first write
+  // and all subsequent updates without needing a separate "init" call.
+  app.put('/api/data', authMiddleware, async (req, res) => {
+    try {
+      const payload = JSON.stringify(req.body);
+      await db.execute(`
+        INSERT INTO app_data (id, payload)
+        VALUES (1, ?)
+        ON DUPLICATE KEY UPDATE payload = VALUES(payload)
+      `, [payload]);
+      res.json({ message: 'Saved' });
+    } catch (err) {
+      console.error('PUT /api/data error:', err);
       res.status(500).json({ message: 'Server error' });
     }
   });

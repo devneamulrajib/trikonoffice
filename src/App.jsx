@@ -56,9 +56,7 @@ const DEFAULT_DB = {
   clients:          [],
 };
 
-// ─── ROLE PERMISSION MAP ──────────────────────────────────────────────────────
-// Lists every view that requires superadmin.
-// Any view NOT listed here is accessible by all logged-in users.
+// ─── VIEWS THAT ARE ALWAYS SUPERADMIN-ONLY (never assignable) ─────────────────
 const SUPERADMIN_ONLY_VIEWS = new Set([
   'approvals',
   'budget_request',
@@ -69,6 +67,25 @@ const SUPERADMIN_ONLY_VIEWS = new Set([
   'clients_manage',
   'clients_import',
 ]);
+
+// ─── MAP: view id → permission key required for regular users ─────────────────
+// If a view id is in this map, a regular user needs that permKey in their
+// permissions array to access it. Views NOT in this map (and not superadmin-only)
+// are always accessible (e.g. dashboard).
+const VIEW_PERM_MAP = {
+  add_expense:      'add_expense',
+  budget_history:   'budget_history',
+  salary_advance:   'salary_advance',
+  settings:         'settings',
+  call_center:      'call_center',
+  cc_new_call:      'cc_new_call',
+  cc_follow_up:     'cc_follow_up',
+  cc_transfer:      'cc_transfer',
+  cc_comments:      'cc_comments',
+  cc_call_logs:     'cc_call_logs',
+  cc_requirements:  'cc_requirements',
+  clients:          'clients',
+};
 
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
 const Forbidden = ({ onBack }) => (
@@ -109,12 +126,12 @@ const ClearSuite = () => {
         ...DEFAULT_DB,
         ...parsed,
         callLogs:         parsed.callLogs         ?? [],
-        callQueue:        parsed.callQueue        ?? [],
-        followUps:        parsed.followUps        ?? [],
-        transferRequests: parsed.transferRequests ?? [],
-        ccComments:       parsed.ccComments       ?? [],
-        requirements:     parsed.requirements     ?? [],
-        clients:          parsed.clients          ?? [],
+        callQueue:        parsed.callQueue         ?? [],
+        followUps:        parsed.followUps         ?? [],
+        transferRequests: parsed.transferRequests  ?? [],
+        ccComments:       parsed.ccComments        ?? [],
+        requirements:     parsed.requirements      ?? [],
+        clients:          parsed.clients           ?? [],
       };
     }
     return DEFAULT_DB;
@@ -124,7 +141,7 @@ const ClearSuite = () => {
     localStorage.setItem('clear_db_v6', JSON.stringify(db));
   }, [db]);
 
-  // ── Check existing session on load ──────────────────────────────────────────
+  // ── Restore session on load ──────────────────────────────────────────────
   useEffect(() => {
     const s = localStorage.getItem('clear_session_v6');
     const t = localStorage.getItem('token');
@@ -161,9 +178,27 @@ const ClearSuite = () => {
     setView('dashboard');
   };
 
-  // ── Safe setView: redirect to dashboard if user lacks permission ─────────────
+  // ── Permission check for a given view ───────────────────────────────────
+  // Returns true if the current user is allowed to see this view.
+  const userCan = (v) => {
+    if (!user) return false;
+    if (user.role === 'superadmin') return true;
+
+    // Superadmin-only views are blocked
+    if (SUPERADMIN_ONLY_VIEWS.has(v)) return false;
+
+    // Dashboard is always visible
+    if (v === 'dashboard') return true;
+
+    // Check permission map
+    const requiredPerm = VIEW_PERM_MAP[v];
+    if (!requiredPerm) return true; // no perm required → visible
+    return (user.permissions ?? []).includes(requiredPerm);
+  };
+
+  // ── Safe setView: redirect to dashboard if user lacks permission ─────────
   const safeSetView = (v) => {
-    if (SUPERADMIN_ONLY_VIEWS.has(v) && user?.role !== 'superadmin') {
+    if (!userCan(v)) {
       setView('dashboard');
       return;
     }
@@ -205,8 +240,8 @@ const ClearSuite = () => {
 
   const isSuperAdmin = user?.role === 'superadmin';
 
-  // ── If current view is restricted and user isn't superadmin, show forbidden ─
-  const isViewForbidden = SUPERADMIN_ONLY_VIEWS.has(view) && !isSuperAdmin;
+  // ── Is the current view forbidden for this user? ─────────────────────────
+  const isViewForbidden = !userCan(view);
 
   const ccProps = { db, setDb, logAction, user };
 

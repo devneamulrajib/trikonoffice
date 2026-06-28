@@ -2,18 +2,29 @@ import React from 'react';
 import { LogOut, Zap, Users } from 'lucide-react';
 import NAVITEMS from '../constants/navItems';
 
-// Helper: can this role see this item?
-const canSee = (item, role) => {
-  if (!item.roles) return true;
-  if (item.roles === 'all') return true;
-  if (item.roles === 'superadmin') return role === 'superadmin';
-  if (Array.isArray(item.roles)) return item.roles.includes(role);
-  return true;
+// ─── PERMISSION CHECK ─────────────────────────────────────────────────────────
+// Returns true if the logged-in user should see this nav item.
+//
+// Rules:
+//  1. superadmin sees everything.
+//  2. Items with roles: 'superadmin' are hidden from regular users.
+//  3. Items with roles: 'all' and NO permKey are always visible (e.g. Dashboard).
+//  4. Items with roles: 'all' AND a permKey are visible only if that key is in
+//     the user's permissions array.
+const canSee = (item, user) => {
+  if (!item) return false;
+  if (user?.role === 'superadmin') return true;
+  if (item.roles === 'superadmin') return false;
+
+  // 'all' items without a permKey → always visible
+  if (!item.permKey) return true;
+
+  // 'all' items with a permKey → check user.permissions
+  const perms = user?.permissions ?? [];
+  return perms.includes(item.permKey);
 };
 
 const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount }) => {
-  const role = user?.role;
-
   return (
     <aside style={{
       width: 260,
@@ -77,13 +88,21 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
       {/* ── NAV LINKS ────────────────────────────────────────────────────── */}
       <nav style={{ flex: 1, padding: '0 16px', overflowY: 'auto' }}>
-        {NAVITEMS.map((item, idx) => {
 
-          // Skip items this role cannot see
-          if (!canSee(item, role)) return null;
+        {/* ── CORE section header (always shown) ── */}
+        <div style={{
+          fontSize: 10, fontWeight: 700,
+          color: '#475569', textTransform: 'uppercase',
+          padding: '8px 12px 8px', letterSpacing: '0.05em'
+        }}>
+          Core
+        </div>
+
+        {NAVITEMS.map((item, idx) => {
 
           /* ── DIVIDER / SECTION HEADER ── */
           if (item.type === 'divider') {
+            // Only show the divider if at least one child in next items is visible
             return (
               <div key={`divider-${idx}`} style={{
                 fontSize: 10, fontWeight: 700,
@@ -95,8 +114,11 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             );
           }
 
-          /* ── GROUP ── */
+          /* ── GROUP (Call Center, Clients) ── */
           if (item.type === 'group') {
+            // Hide the whole group if user can't see it
+            if (!canSee(item, user)) return null;
+
             const isActive = view === item.id || item.children?.some(c => c.id === view);
             return (
               <button
@@ -112,18 +134,26 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           }
 
           /* ── REGULAR NAV ITEM ── */
+          if (!canSee(item, user)) return null;
+
+          // Section headers based on index position
+          const sectionHeader = (() => {
+            if (idx === 3) return 'Finance';
+            if (idx === 7) return 'System';
+            return null;
+          })();
+
           return (
             <React.Fragment key={item.id}>
-              {(idx === 0 || idx === 3 || idx === 7) && (
+              {sectionHeader && (
                 <div style={{
                   fontSize: 10, fontWeight: 700,
                   color: '#475569', textTransform: 'uppercase',
                   padding: '24px 12px 8px', letterSpacing: '0.05em'
                 }}>
-                  {idx === 0 ? 'Core' : idx === 3 ? 'Finance' : 'System'}
+                  {sectionHeader}
                 </div>
               )}
-
               <button
                 onClick={() => setView(item.id)}
                 className={`nav-link${view === item.id ? ' active' : ''}`}
@@ -146,7 +176,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
         })}
 
         {/* ── SUPER ADMIN ONLY: Manage Users ───────────────────────────── */}
-        {role === 'superadmin' && (
+        {user?.role === 'superadmin' && (
           <>
             <div style={{
               fontSize: 10, fontWeight: 700,
@@ -186,7 +216,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
               {user?.name || user?.firstName || 'User'}
             </div>
             <div style={{ color: '#64748B', fontSize: 11 }}>
-              {role === 'superadmin' ? 'Super Admin' : 'User'}
+              {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
             </div>
           </div>
           <button

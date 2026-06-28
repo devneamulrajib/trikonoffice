@@ -64,8 +64,6 @@ const SUPERADMIN_ONLY_VIEWS = new Set([
   'categories',
   'activity',
   'manage_users',
-  'clients_manage',
-  'clients_import',
 ]);
 
 // ─── MAP: view id → permission key required for regular users ─────────────────
@@ -85,6 +83,8 @@ const VIEW_PERM_MAP = {
   cc_call_logs:     'cc_call_logs',
   cc_requirements:  'cc_requirements',
   clients:          'clients',
+  clients_manage:   'clients_manage',
+  clients_import:   'clients_import',
 };
 
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
@@ -293,8 +293,8 @@ const ClearSuite = () => {
 
           {/* ── Clients ─────────────────────────────────────────────────── */}
           {!isViewForbidden && view === 'clients'        && <ClientsHub    key="clh" setView={safeSetView} />}
-          {!isViewForbidden && view === 'clients_manage' && isSuperAdmin && <ManageClients key="clm" {...ccProps} />}
-          {!isViewForbidden && view === 'clients_import' && isSuperAdmin && <ImportClients key="cli" {...ccProps} />}
+          {!isViewForbidden && view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
+          {!isViewForbidden && view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
 
         </AnimatePresence>
       </main>

@@ -16,6 +16,8 @@ const ALL_SECTIONS = [
   { key: 'cc_call_logs',   label: 'Call Logs',        group: 'Call Center'       },
   { key: 'cc_requirements',label: 'Requirements',     group: 'Call Center'       },
   { key: 'clients',        label: 'Clients (View)',   group: 'Client Management' },
+  { key: 'clients_manage', label: 'Manage Clients',   group: 'Client Management' },
+  { key: 'clients_import', label: 'Import Clients',   group: 'Client Management' },
 ];
 
 // Group sections for display

@@ -1,722 +1,600 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, X, Plus, Search, ChevronLeft, ChevronRight, ChevronDown,
   MessageCircle, PhoneCall, Users, User, Calendar, Pencil, Trash2,
-  Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass, LandPlot,
+  Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
+  LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
+  ArrowRight, Zap,
 } from 'lucide-react';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — all colours come from CSS vars so dark-mode works for free
-// ─────────────────────────────────────────────────────────────────────────────
-const t = {
-  radius: { sm: 6, md: 8, lg: 12, xl: 16, full: 999 },
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  // Surfaces
+  canvas:      '#0F172A',   // page background
+  nav:         '#1E293B',   // sidebar / nav chrome
+  surface:     '#FFFFFF',
+  surfaceRaised: '#F8FAFC',
+  surfaceSunken: '#F1F5F9',
+
+  // Borders
+  border:      '#E2E8F0',
+  borderStrong:'#CBD5E1',
+
+  // Text
+  text:        '#0F172A',
+  textMid:     '#475569',
+  textMuted:   '#94A3B8',
+  textInverse: '#FFFFFF',
+
+  // Accent — warm amber, single bold choice
+  accent:      '#F59E0B',
+  accentDark:  '#D97706',
+  accentLight: '#FEF3C7',
+  accentBorder:'#FCD34D',
+
+  // Semantic
+  green:    '#10B981', greenBg: '#ECFDF5', greenBorder: '#6EE7B7',
+  red:      '#EF4444', redBg:   '#FEF2F2', redBorder:   '#FCA5A5',
+  blue:     '#3B82F6', blueBg:  '#EFF6FF', blueBorder:  '#BFDBFE',
+  yellow:   '#F59E0B', yellowBg:'#FFFBEB', yellowBorder:'#FDE68A',
+  purple:   '#8B5CF6', purpleBg:'#F5F3FF', purpleBorder:'#DDD6FE',
+  slate:    '#64748B', slateBg: '#F8FAFC', slateBorder: '#E2E8F0',
+
+  // Radius
+  r: { xs: 4, sm: 6, md: 8, lg: 12, xl: 16, full: 9999 },
+
+  // Shadow
   shadow: {
-    sm: '0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05)',
-    md: '0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06)',
-    lg: '0 20px 48px rgba(0,0,0,.18), 0 8px 16px rgba(0,0,0,.08)',
+    sm: '0 1px 2px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.08)',
+    md: '0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05)',
+    lg: '0 20px 60px rgba(0,0,0,.2),0 8px 20px rgba(0,0,0,.1)',
+    xl: '0 32px 80px rgba(0,0,0,.28)',
   },
-  space: { xs: 6, sm: 10, md: 14, lg: 20, xl: 28 },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared client schema — MUST mirror ManageClients.jsx / ImportClients.jsx
-// so a client added/imported anywhere looks identical everywhere.
-// ─────────────────────────────────────────────────────────────────────────────
-const CLIENT_TYPES   = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
-const PURPOSES        = ['Invest', 'Living', 'Rent'];
-const STATUS_OPTIONS  = ['Lead', 'Contacted', 'Negotiation', 'Closed', 'Lost'];
-const SOURCES         = ['Referral', 'Walk-in', 'Website', 'Facebook', 'Call Center', 'Agent Network', 'Other'];
-const PROPERTY_TYPES  = ['Apartment', 'Villa', 'Plot/Land', 'Commercial', 'Office Space', 'Townhouse'];
-
-const emptyClient = () => ({
-  id: Date.now(),
-  name: '',
-  profession: '',
-  designation: '',
-  company: '',
-  phone: '',
-  altPhone: '',
-  email: '',
-  type: 'Buyer',
-  purpose: '',
-  status: 'Lead',
-  source: 'Referral',
-  propertyType: 'Apartment',
-  budgetMin: '',
-  budgetMax: '',
-  location: '',
-  address: '',
-  reqLand: '',
-  reqFlat: '',
-  reqFacing: '',
-  notes: '',
-  calledAt: null,
-  createdAt: new Date().toISOString(),
-});
-
-const sourcePalette = {
-  Facebook:      { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  'Walk-in':     { bg: '#fdf4ff', color: '#9333ea', border: '#e9d5ff' },
-  Referral:      { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa' },
-  Website:       { bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
-  'Call Center': { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  'Agent Network': { bg: '#fdf2f8', color: '#db2777', border: '#fbcfe8' },
-  Other:         { bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' },
+// ─── Source → left-edge colour (the signature element) ───────────────────────
+const SOURCE_ACCENT = {
+  Facebook:        '#2563EB',
+  'Walk-in':       '#9333EA',
+  Referral:        '#16A34A',
+  Website:         '#0EA5E9',
+  'Call Center':   '#F59E0B',
+  'Agent Network': '#EC4899',
+  Other:           '#94A3B8',
 };
 
-const statusPalette = {
-  New: { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  Contacted: { bg: '#f5f3ff', color: '#7c3aed', border: '#ddd6fe' },
-  Interested: { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  'Not Interested': { bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' },
-  Converted: { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
-  Dropped: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+const SOURCE_PALETTE = {
+  Facebook:        { bg:'#EFF6FF', color:'#2563EB', border:'#BFDBFE' },
+  'Walk-in':       { bg:'#FDF4FF', color:'#9333EA', border:'#E9D5FF' },
+  Referral:        { bg:'#F0FDF4', color:'#16A34A', border:'#BBF7D0' },
+  Website:         { bg:'#F0F9FF', color:'#0284C7', border:'#BAE6FD' },
+  'Call Center':   { bg:'#FFFBEB', color:'#D97706', border:'#FDE68A' },
+  'Agent Network': { bg:'#FDF2F8', color:'#DB2777', border:'#FBCFE8' },
+  Other:           { bg:'#F8FAFC', color:'#64748B', border:'#E2E8F0' },
 };
 
-const AVATAR_COLORS = [
-  { bg: '#dbeafe', color: '#1e40af' },
-  { bg: '#dcfce7', color: '#15803d' },
-  { bg: '#fef3c7', color: '#b45309' },
-  { bg: '#fce7f3', color: '#be185d' },
-  { bg: '#e0e7ff', color: '#4338ca' },
-  { bg: '#ffedd5', color: '#c2410c' },
-  { bg: '#ccfbf1', color: '#0f766e' },
+// ─── Schema ───────────────────────────────────────────────────────────────────
+const CLIENT_TYPES   = ['Buyer','Seller','Tenant','Landlord','Investor'];
+const PURPOSES       = ['Invest','Living','Rent'];
+const STATUS_OPTIONS = ['Lead','Contacted','Negotiation','Closed','Lost'];
+const SOURCES        = ['Referral','Walk-in','Website','Facebook','Call Center','Agent Network','Other'];
+const PROPERTY_TYPES = ['Apartment','Villa','Plot/Land','Commercial','Office Space','Townhouse'];
+
+const CALL_OUTCOMES = [
+  { value:'Answered',     label:'Answered',      icon: PhoneIncoming, color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
+  { value:'Busy',         label:'Busy',           icon: PhoneOff,      color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
+  { value:'No Answer',    label:'No Answer',      icon: PhoneMissed,   color: C.yellow, bg: C.yellowBg, border: C.yellowBorder },
+  { value:'Switched Off', label:'Switched Off',   icon: PhoneOff,      color: C.red,    bg: C.redBg,    border: C.redBorder    },
+  { value:'Wrong Number', label:'Wrong Number',   icon: AlertCircle,   color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
 ];
 
-const hashStr = s => {
-  let h = 0;
-  for (let i = 0; i < (s || '').length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-};
+const LEAD_STATUSES = [
+  { value:'New',            color: C.blue,   bg: C.blueBg   },
+  { value:'Contacted',      color: C.purple, bg: C.purpleBg },
+  { value:'Interested',     color: C.green,  bg: C.greenBg  },
+  { value:'Not Interested', color: C.slate,  bg: C.slateBg  },
+  { value:'Converted',      color: C.green,  bg: C.greenBg  },
+  { value:'Dropped',        color: C.red,    bg: C.redBg    },
+];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Reusable styled primitives
-// ─────────────────────────────────────────────────────────────────────────────
-const base = {
-  width: '100%',
-  background: 'var(--bg-input, #f8fafc)',
-  border: '1.5px solid var(--border, #e2e8f0)',
-  borderRadius: t.radius.md,
-  padding: '9px 12px',
-  fontSize: 13.5,
-  color: 'var(--text, #0f172a)',
-  outline: 'none',
-  boxSizing: 'border-box',
-  transition: 'border-color 0.15s, box-shadow 0.15s',
-  lineHeight: 1.4,
-};
+const CONTACT_METHODS = ['Call','WhatsApp','SMS','Email'];
 
-const fieldFocus = {
-  onFocus: e => {
-    e.target.style.borderColor = '#3b82f6';
-    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.12)';
-  },
-  onBlur: e => {
-    e.target.style.borderColor = 'var(--border, #e2e8f0)';
-    e.target.style.boxShadow = 'none';
-  },
-};
+const emptyClient = () => ({
+  id: Date.now(), name:'', profession:'', designation:'', company:'',
+  phone:'', altPhone:'', email:'', type:'Buyer', purpose:'', status:'Lead',
+  source:'Referral', propertyType:'Apartment', budgetMin:'', budgetMax:'',
+  location:'', address:'', reqLand:'', reqFlat:'', reqFacing:'', notes:'',
+  calledAt: null, createdAt: new Date().toISOString(),
+});
 
-const Label = ({ children, required }) => (
-  <label style={{
-    display: 'block',
-    fontSize: 11.5,
-    fontWeight: 600,
-    color: 'var(--text-muted, #64748b)',
-    marginBottom: 5,
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
-  }}>
-    {children}
-    {required && <span style={{ color: '#ef4444', marginLeft: 3 }}>*</span>}
-  </label>
-);
+const AVATAR_PALETTE = [
+  ['#DBEAFE','#1E40AF'],['#DCFCE7','#15803D'],['#FEF3C7','#92400E'],
+  ['#FCE7F3','#9D174D'],['#E0E7FF','#3730A3'],['#FFEDD5','#9A3412'],
+  ['#CCFBF1','#0F766E'],['#FAE8FF','#7E22CE'],
+];
+const hashStr = s => { let h=0; for (let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; };
 
-const Input = ({ ...props }) => (
-  <input style={base} {...fieldFocus} {...props} />
-);
-
-const Sel = ({ value, onChange, children }) => (
-  <div style={{ position: 'relative' }}>
-    <select
-      value={value}
-      onChange={onChange}
-      style={{ ...base, paddingRight: 32, cursor: 'pointer', appearance: 'none' }}
-      {...fieldFocus}
-    >
-      {children}
-    </select>
-    <svg
-      style={{
-        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-        pointerEvents: 'none', color: 'var(--text-muted, #94a3b8)',
-      }}
-      width="12" height="12" viewBox="0 0 12 12" fill="none"
-    >
-      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  </div>
-);
-
-const ROField = ({ value }) => (
-  <div style={{
-    ...base,
-    background: 'var(--bg-muted, #f1f5f9)',
-    color: 'var(--text-muted, #475569)',
-    cursor: 'default',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  }}>
-    {value || '—'}
-  </div>
-);
-
-const Toggle = ({ checked, onChange, label }) => (
-  <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', userSelect: 'none' }}>
-    {label && <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted, #64748b)' }}>{label}</span>}
-    <span style={{
-      position: 'relative', width: 36, height: 20, borderRadius: 999, flexShrink: 0,
-      background: checked ? '#3b82f6' : 'var(--border, #cbd5e1)',
-      transition: 'background 0.18s',
-    }}>
-      <input
-        type="checkbox" checked={checked} onChange={onChange}
-        style={{ position: 'absolute', inset: 0, opacity: 0, margin: 0, cursor: 'pointer' }}
-      />
-      <span style={{
-        position: 'absolute', top: 2, left: checked ? 18 : 2, width: 16, height: 16,
-        borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-        transition: 'left 0.18s',
-      }} />
-    </span>
-  </label>
-);
-
-const Avatar = ({ name, size = 34 }) => {
-  const initials = (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
-  const pal = AVATAR_COLORS[hashStr(name) % AVATAR_COLORS.length];
+// ─── Low-level primitives ─────────────────────────────────────────────────────
+const Avatar = ({ name, size=32 }) => {
+  const initials = (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()).join('')||'?';
+  const [bg, fg] = AVATAR_PALETTE[hashStr(name) % AVATAR_PALETTE.length];
   return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: pal.bg, color: pal.color,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.36, fontWeight: 700,
-    }}>
+    <div style={{ width:size, height:size, borderRadius:'50%', flexShrink:0,
+      background:bg, color:fg, display:'flex', alignItems:'center', justifyContent:'center',
+      fontSize:size*.34, fontWeight:700, letterSpacing:'-.01em' }}>
       {initials}
     </div>
   );
 };
 
-const Badge = ({ label, palette }) => {
-  const pal = (palette || {})[label] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      padding: '2px 9px', borderRadius: 999,
-      fontSize: 11.5, fontWeight: 600,
-      background: pal.bg, color: pal.color,
-      border: `1px solid ${pal.border}`,
-      whiteSpace: 'nowrap',
-    }}>
-      {label}
-    </span>
-  );
-};
-const SourceBadge = ({ source }) => <Badge label={source} palette={sourcePalette} />;
-const StatusBadge = ({ status }) => <Badge label={status} palette={statusPalette} />;
-
-const Pill = ({ children }) => (
-  <span style={{
-    display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 999,
-    fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.18)', color: '#fff',
-    whiteSpace: 'nowrap',
-  }}>
-    {children}
+const Tag = ({ label, color, bg, border }) => (
+  <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px',
+    borderRadius:C.r.full, fontSize:11, fontWeight:600,
+    background:bg||C.surfaceRaised, color:color||C.textMid,
+    border:`1px solid ${border||C.border}`, letterSpacing:'.01em', whiteSpace:'nowrap' }}>
+    {label}
   </span>
 );
 
-const iconBtnStyle = (bg, color, shadowColor) => ({
-  width: 30, height: 30, borderRadius: t.radius.sm,
-  border: 'none', background: bg, color,
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  cursor: 'pointer',
-  boxShadow: shadowColor ? `0 1px 4px ${shadowColor}` : 'none',
-  transition: 'opacity 0.15s, transform 0.1s',
-});
-
-const iconBtnHover = {
-  onMouseEnter: e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.transform = 'scale(1.08)'; },
-  onMouseLeave: e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; },
+const SourceTag = ({ source }) => {
+  const p = SOURCE_PALETTE[source] || SOURCE_PALETTE.Other;
+  return <Tag label={source} color={p.color} bg={p.bg} border={p.border}/>;
 };
 
-const actionBtnPrimary = {
-  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: t.radius.md,
-  fontSize: 13.5, fontWeight: 600, textDecoration: 'none', cursor: 'pointer', border: 'none',
-  background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)', color: '#fff',
-  boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
+const FieldLabel = ({ children, required }) => (
+  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, letterSpacing:'.07em',
+    textTransform:'uppercase', marginBottom:5, display:'flex', gap:3 }}>
+    {children}{required && <span style={{ color:C.red }}>*</span>}
+  </div>
+);
+
+const inputBase = {
+  width:'100%', padding:'9px 12px', fontSize:14,
+  border:`1.5px solid ${C.border}`, borderRadius:C.r.md,
+  color:C.text, background:C.surface, outline:'none',
+  boxSizing:'border-box', lineHeight:1.5,
+  fontFamily:'inherit', transition:'border-color .12s,box-shadow .12s',
+};
+const onFocus = e => { e.target.style.borderColor=C.accent; e.target.style.boxShadow=`0 0 0 3px ${C.accent}22`; };
+const onBlur  = e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none'; };
+const focusProps = { onFocus, onBlur };
+
+const Input  = ({ style, ...p }) => <input  style={{ ...inputBase, ...style }} {...focusProps} {...p}/>;
+const Select = ({ children, style, ...p }) => (
+  <div style={{ position:'relative' }}>
+    <select style={{ ...inputBase, paddingRight:30, cursor:'pointer', appearance:'none', ...style }} {...focusProps} {...p}>
+      {children}
+    </select>
+    <ChevronDown size={12} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
+      color:C.textMuted, pointerEvents:'none' }}/>
+  </div>
+);
+const Textarea = ({ style, ...p }) => (
+  <textarea style={{ ...inputBase, resize:'vertical', minHeight:80, lineHeight:1.6, ...style }} {...focusProps} {...p}/>
+);
+
+const ROField = ({ value }) => (
+  <div style={{ ...inputBase, background:C.surfaceSunken, color:C.textMid, cursor:'default',
+    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+    {value||'—'}
+  </div>
+);
+
+// Amber primary button
+const PrimaryBtn = ({ children, onClick, style, disabled, ...p }) => (
+  <button onClick={onClick} disabled={disabled} style={{
+    display:'inline-flex', alignItems:'center', gap:7, padding:'10px 20px',
+    borderRadius:C.r.md, fontSize:13.5, fontWeight:700, cursor:disabled?'not-allowed':'pointer',
+    border:'none', background:disabled?C.border:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+    color:disabled?C.textMuted:'#fff',
+    boxShadow:disabled?'none':`0 2px 10px ${C.accent}44`,
+    transition:'opacity .15s,transform .12s', ...style,
+  }}
+    onMouseEnter={e=>{ if(!disabled){e.currentTarget.style.opacity='.9';e.currentTarget.style.transform='translateY(-1px)';} }}
+    onMouseLeave={e=>{ e.currentTarget.style.opacity='1';e.currentTarget.style.transform='translateY(0)'; }}
+    {...p}
+  >
+    {children}
+  </button>
+);
+
+const GhostBtn = ({ children, onClick, style }) => (
+  <button onClick={onClick} style={{
+    display:'inline-flex', alignItems:'center', gap:6, padding:'9px 18px',
+    borderRadius:C.r.md, fontSize:13.5, fontWeight:600, cursor:'pointer',
+    border:`1.5px solid ${C.border}`, background:C.surface, color:C.textMid,
+    transition:'background .12s,border-color .12s', ...style,
+  }}
+    onMouseEnter={e=>{ e.currentTarget.style.background=C.surfaceRaised; e.currentTarget.style.borderColor=C.borderStrong; }}
+    onMouseLeave={e=>{ e.currentTarget.style.background=C.surface; e.currentTarget.style.borderColor=C.border; }}
+  >
+    {children}
+  </button>
+);
+
+const IconAction = ({ icon: Icon, onClick, title, variant='default' }) => {
+  const variants = {
+    default:  { bg:'#F1F5F9', color:'#475569', hoverBg:'#E2E8F0' },
+    danger:   { bg:'#FEF2F2', color:C.red,     hoverBg:'#FEE2E2' },
+    primary:  { bg:`linear-gradient(135deg,${C.accentDark},${C.accent})`, color:'#fff', hoverBg:null },
+  };
+  const v = variants[variant];
+  return (
+    <button onClick={onClick} title={title} style={{
+      width:32, height:32, borderRadius:C.r.sm, border:'none', flexShrink:0,
+      background:v.bg, color:v.color, cursor:'pointer',
+      display:'inline-flex', alignItems:'center', justifyContent:'center',
+      boxShadow: variant==='primary' ? `0 2px 8px ${C.accent}44` : 'none',
+      transition:'opacity .12s,transform .1s',
+    }}
+      onMouseEnter={e=>{ e.currentTarget.style.opacity='.8'; e.currentTarget.style.transform='scale(1.07)'; }}
+      onMouseLeave={e=>{ e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='scale(1)'; }}
+    >
+      <Icon size={14}/>
+    </button>
+  );
 };
 
-const actionBtnSecondary = {
-  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: t.radius.md,
-  fontSize: 13.5, fontWeight: 600, textDecoration: 'none', cursor: 'pointer',
-  background: '#f0fdf4', color: '#16a34a', border: '1.5px solid #bbf7d0',
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Section building blocks — shared by every modal so the whole app feels
-// like one coherent system instead of several differently-organised forms
-// ─────────────────────────────────────────────────────────────────────────────
-const SectionCard = ({ children, style = {} }) => (
-  <div style={{
-    border: '1.5px solid var(--border, #e2e8f0)',
-    borderRadius: t.radius.md,
-    padding: 18,
-    background: 'var(--bg-card, #fff)',
-    ...style,
-  }}>
+// Card shell
+const Card = ({ children, style }) => (
+  <div style={{ background:C.surface, border:`1px solid ${C.border}`,
+    borderRadius:C.r.lg, padding:20, boxShadow:C.shadow.sm, ...style }}>
     {children}
   </div>
 );
 
-const SectionHeader = ({ icon, title, description, action }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-      <div style={{
-        width: 30, height: 30, borderRadius: t.radius.sm, flexShrink: 0,
-        background: '#eff6ff', color: '#2563eb',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {icon}
+const CardHeader = ({ icon: Icon, title, subtitle, action }) => (
+  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+    <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+      <div style={{ width:32, height:32, borderRadius:C.r.sm, background:C.accentLight,
+        color:C.accentDark, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+        <Icon size={15}/>
       </div>
       <div>
-        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text, #1e293b)', margin: 0 }}>{title}</p>
-        {description && <p style={{ fontSize: 11.5, color: 'var(--text-muted, #94a3b8)', margin: '2px 0 0' }}>{description}</p>}
+        <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>{title}</div>
+        {subtitle && <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{subtitle}</div>}
       </div>
     </div>
     {action}
   </div>
 );
 
-const CollapsibleSection = ({ title, icon, defaultOpen = false, summary, children }) => {
+// Inline toggle switch
+const Toggle = ({ checked, onChange }) => (
+  <div onClick={onChange} style={{
+    width:40, height:22, borderRadius:C.r.full, cursor:'pointer', flexShrink:0,
+    background:checked ? C.accent : C.border, transition:'background .18s', position:'relative',
+  }}>
+    <div style={{
+      position:'absolute', top:2, left:checked?20:2, width:18, height:18,
+      borderRadius:'50%', background:'#fff', boxShadow:'0 1px 4px rgba(0,0,0,.2)',
+      transition:'left .18s',
+    }}/>
+  </div>
+);
+
+// Collapsible section
+const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{
-      border: '1.5px solid var(--border, #e2e8f0)',
-      borderRadius: t.radius.md,
-      overflow: 'hidden',
-      background: 'var(--bg-card, #fff)',
-    }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '12px 16px', textAlign: 'left',
-          background: open ? 'var(--bg-muted, #f8fafc)' : 'transparent',
-          border: 'none', cursor: 'pointer',
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-          {icon && <span style={{ color: 'var(--text-muted, #64748b)', display: 'flex', flexShrink: 0 }}>{icon}</span>}
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text, #0f172a)', flexShrink: 0 }}>{title}</span>
+    <div style={{ border:`1px solid ${C.border}`, borderRadius:C.r.lg, overflow:'hidden' }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center',
+        padding:'12px 16px', background:open?C.surfaceRaised:C.surface,
+        border:'none', cursor:'pointer', textAlign:'left',
+        transition:'background .12s',
+      }}>
+        <span style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+          {Icon && <Icon size={14} style={{ color:C.textMuted, flexShrink:0 }}/>}
+          <span style={{ fontSize:13.5, fontWeight:700, color:C.text }}>{title}</span>
           {!open && summary && (
-            <span style={{
-              fontSize: 12, color: 'var(--text-muted, #94a3b8)', fontWeight: 500,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {summary}
-            </span>
+            <span style={{ fontSize:12, color:C.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{summary}</span>
           )}
         </span>
-        <ChevronDown
-          size={15}
-          style={{
-            color: 'var(--text-muted, #94a3b8)', flexShrink: 0,
-            transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0)',
-          }}
-        />
+        <ChevronDown size={14} style={{ color:C.textMuted, transition:'transform .2s', transform:open?'rotate(180deg)':'none', flexShrink:0 }}/>
       </button>
-      {open && (
-        <div style={{ padding: 16, borderTop: '1px solid var(--border, #e2e8f0)' }}>
-          {children}
-        </div>
-      )}
+      {open && <div style={{ padding:16, borderTop:`1px solid ${C.border}` }}>{children}</div>}
     </div>
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Add / Edit Client Modal — now mirrors the exact same field set used in
-// Manage Clients & Import Clients (Basic Info / Contact Info / Deal Info /
-// Requirements / Remarks) so a client looks identical no matter where it
-// was created.
-// ─────────────────────────────────────────────────────────────────────────────
+// Pill header label (used in modal gradient header)
+const HeaderPill = ({ children }) => (
+  <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 9px', borderRadius:C.r.full,
+    fontSize:11, fontWeight:600, background:'rgba(255,255,255,.18)', color:'rgba(255,255,255,.95)',
+    letterSpacing:'.02em' }}>
+    {children}
+  </span>
+);
+
+// ─── Call Outcome Picker ──────────────────────────────────────────────────────
+const OutcomePicker = ({ value, onChange }) => (
+  <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:7 }}>
+    {CALL_OUTCOMES.map(o => {
+      const active = value === o.value;
+      const Icon = o.icon;
+      return (
+        <button key={o.value} onClick={()=>onChange(o.value)} style={{
+          padding:'10px 6px', border:`2px solid ${active?o.color:C.border}`,
+          borderRadius:C.r.md, background:active?o.bg:C.surface,
+          cursor:'pointer', textAlign:'center', transition:'all .13s',
+          display:'flex', flexDirection:'column', alignItems:'center', gap:5,
+        }}>
+          <Icon size={16} color={active?o.color:C.textMuted}/>
+          <span style={{ fontSize:10.5, fontWeight:active?700:500, color:active?o.color:C.textMuted, lineHeight:1.2 }}>{o.label}</span>
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ─── Lead Status Chips ────────────────────────────────────────────────────────
+const LeadStatusPicker = ({ value, onChange }) => (
+  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+    {LEAD_STATUSES.map(s => {
+      const active = value === s.value;
+      return (
+        <button key={s.value} onClick={()=>onChange(s.value)} style={{
+          padding:'6px 13px', borderRadius:C.r.full,
+          border:`1.5px solid ${active?s.color:C.border}`,
+          background:active?s.bg:C.surface,
+          color:active?s.color:C.textMid, fontSize:12.5,
+          fontWeight:active?700:500, cursor:'pointer', transition:'all .13s',
+        }}>
+          {s.value}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ─── Contact Method Chips ─────────────────────────────────────────────────────
+const MethodPicker = ({ value, onChange }) => (
+  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+    {CONTACT_METHODS.map(m => {
+      const active = value === m;
+      return (
+        <button key={m} onClick={()=>onChange(m)} style={{
+          padding:'6px 13px', borderRadius:C.r.full,
+          border:`1.5px solid ${active?C.accent:C.border}`,
+          background:active?C.accentLight:C.surface,
+          color:active?C.accentDark:C.textMid, fontSize:12.5,
+          fontWeight:active?700:500, cursor:'pointer', transition:'all .13s',
+        }}>
+          {m}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ─── Grid helper ─────────────────────────────────────────────────────────────
+const Grid = ({ cols='1fr 1fr', gap=13, children, style }) => (
+  <div style={{ display:'grid', gridTemplateColumns:cols, gap, ...style }}>{children}</div>
+);
+
+// ─── Client Form Modal ────────────────────────────────────────────────────────
 const ClientFormModal = ({ onClose, onSave, client }) => {
   const isEdit = Boolean(client);
-  const [form, setForm] = useState({ ...emptyClient(), ...(client || {}) });
+  const [form, setForm] = useState({ ...emptyClient(), ...(client||{}) });
   const [errors, setErrors] = useState({});
 
-  const set = (k, v) => {
-    setForm(p => ({ ...p, [k]: v }));
-    if (errors[k]) setErrors(p => ({ ...p, [k]: false }));
-  };
+  const set = (k, v) => { setForm(p=>({...p,[k]:v})); if(errors[k]) setErrors(p=>({...p,[k]:false})); };
 
   const handleSubmit = () => {
-    const e = {};
-    if (!form.name?.trim()) e.name = true;
-    if (!form.phone?.trim()) e.phone = true;
+    const e={};
+    if (!form.name?.trim()) e.name=true;
+    if (!form.phone?.trim()) e.phone=true;
     if (Object.keys(e).length) { setErrors(e); return; }
-
-    if (isEdit) {
-      onSave({ ...client, ...form });
-    } else {
-      onSave({
-        ...form,
-        id: Date.now(),
-        calledAt: null,
-        createdAt: new Date().toISOString(),
-      });
-    }
+    onSave(isEdit ? {...client,...form} : {...form, id:Date.now(), calledAt:null, createdAt:new Date().toISOString()});
     onClose();
   };
 
-  const errStyle = { borderColor: '#ef4444', boxShadow: '0 0 0 3px rgba(239,68,68,0.12)' };
+  const errField = { borderColor:C.red, boxShadow:`0 0 0 3px ${C.red}18` };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(15,23,42,0.6)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1100, padding: 20,
-      }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 16, scale: 0.96 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--bg-card, #ffffff)',
-          borderRadius: t.radius.xl,
-          width: '100%', maxWidth: 700,
-          maxHeight: '90vh', overflowY: 'auto',
-          boxShadow: t.shadow.lg,
-          border: '1px solid var(--border, #e2e8f0)',
-        }}
-      >
-        {/* ── Modal Header ── */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '18px 24px',
-          background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-          borderRadius: `${t.radius.xl}px ${t.radius.xl}px 0 0`,
-          position: 'sticky', top: 0, zIndex: 10,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: t.radius.md,
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {isEdit ? <Pencil size={16} color="#fff" /> : <Users size={17} color="#fff" />}
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{ position:'fixed', inset:0, background:'rgba(2,6,23,.7)', backdropFilter:'blur(6px)',
+        display:'flex', alignItems:'center', justifyContent:'center', zIndex:1100, padding:20 }}
+      onClick={onClose}>
+      <motion.div initial={{opacity:0,y:20,scale:.97}} animate={{opacity:1,y:0,scale:1}}
+        exit={{opacity:0,y:14,scale:.97}} transition={{duration:.2,ease:[.16,1,.3,1]}}
+        onClick={e=>e.stopPropagation()}
+        style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:680,
+          maxHeight:'90vh', overflowY:'auto', boxShadow:C.shadow.xl }}>
+
+        {/* Modal header */}
+        <div style={{ padding:'20px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+          borderRadius:`${C.r.xl}px ${C.r.xl}px 0 0`, position:'sticky', top:0, zIndex:10,
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+            <div style={{ width:36, height:36, borderRadius:C.r.md, background:'rgba(255,255,255,.2)',
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {isEdit ? <Pencil size={16} color="#fff"/> : <Users size={17} color="#fff"/>}
             </div>
             <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0, lineHeight: 1.2 }}>
-                {isEdit ? 'Edit Client' : 'Add New Client'}
-              </h2>
-              <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                {isEdit ? 'Update the client details below' : 'Fill in the client details below'}
-              </p>
+              <div style={{ fontSize:15, fontWeight:700, color:'#fff' }}>{isEdit?'Edit Client':'Add New Client'}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,.72)', marginTop:1 }}>
+                {isEdit?'Update the client record':'All fields except phone & name are optional'}
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              border: 'none', background: 'rgba(255,255,255,0.15)',
-              color: '#fff', cursor: 'pointer',
-              width: 30, height: 30, borderRadius: t.radius.sm,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-          >
-            <X size={16} />
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:C.r.sm, border:'none',
+            background:'rgba(255,255,255,.15)', color:'#fff', cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <X size={15}/>
           </button>
         </div>
 
-        {/* ── Form Body — grouped to match Manage Clients / Import Clients ── */}
-        <div style={{ padding: '22px 24px' }}>
+        <div style={{ padding:'22px 24px', display:'flex', flexDirection:'column', gap:14 }}>
 
-          {/* Basic Info */}
-          <SectionCard>
-            <SectionHeader icon={<Briefcase size={15} />} title="Basic Info" description="Who this client is" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label required>Full Name</Label>
-                <input
-                  value={form.name}
-                  onChange={e => set('name', e.target.value)}
-                  placeholder="e.g. Mr. Ahmed Karim"
-                  style={{ ...base, ...(errors.name ? errStyle : {}) }}
-                  {...fieldFocus}
-                />
-                {errors.name && <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>Required</p>}
+          {/* Basic info */}
+          <Card>
+            <CardHeader icon={Briefcase} title="Basic info" subtitle="Identity and professional background"/>
+            <Grid>
+              <div style={{ gridColumn:'1/-1' }}>
+                <FieldLabel required>Full name</FieldLabel>
+                <Input value={form.name} onChange={e=>set('name',e.target.value)} placeholder="e.g. Mr. Ahmed Karim"
+                  style={errors.name?errField:{}}/>
+                {errors.name && <div style={{ fontSize:11, color:C.red, marginTop:4 }}>Name is required</div>}
               </div>
               <div>
-                <Label>Profession</Label>
-                <Input value={form.profession} onChange={e => set('profession', e.target.value)} placeholder="e.g. Doctor, Engineer" />
+                <FieldLabel>Profession</FieldLabel>
+                <Input value={form.profession} onChange={e=>set('profession',e.target.value)} placeholder="Doctor, Engineer…"/>
               </div>
               <div>
-                <Label>Designation</Label>
-                <Input value={form.designation} onChange={e => set('designation', e.target.value)} placeholder="e.g. Senior Manager" />
+                <FieldLabel>Designation</FieldLabel>
+                <Input value={form.designation} onChange={e=>set('designation',e.target.value)} placeholder="Senior Manager"/>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label>Company / Organization</Label>
-                <Input value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. ABC Ltd." />
+              <div style={{ gridColumn:'1/-1' }}>
+                <FieldLabel>Company / Organization</FieldLabel>
+                <Input value={form.company} onChange={e=>set('company',e.target.value)} placeholder="ABC Ltd."/>
               </div>
-            </div>
-          </SectionCard>
+            </Grid>
+          </Card>
 
-          <div style={{ height: 14 }} />
+          {/* Contact */}
+          <Card>
+            <CardHeader icon={Phone} title="Contact info" subtitle="Phone is required; email and alt number are optional"/>
+            <Grid>
+              <div>
+                <FieldLabel required>Phone</FieldLabel>
+                <Input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="01XXXXXXXXX"
+                  style={errors.phone?errField:{}}/>
+                {errors.phone && <div style={{ fontSize:11, color:C.red, marginTop:4 }}>Phone is required</div>}
+              </div>
+              <div>
+                <FieldLabel>Alternative number</FieldLabel>
+                <Input value={form.altPhone} onChange={e=>set('altPhone',e.target.value)} placeholder="01XXXXXXXXX"/>
+              </div>
+              <div style={{ gridColumn:'1/-1' }}>
+                <FieldLabel>Email</FieldLabel>
+                <Input value={form.email} onChange={e=>set('email',e.target.value)} placeholder="email@example.com"/>
+              </div>
+            </Grid>
+          </Card>
 
-          {/* Contact Info */}
-          <SectionCard>
-            <SectionHeader icon={<User size={15} />} title="Contact Info" description="Name and phone are required" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {/* Deal */}
+          <Card>
+            <CardHeader icon={MapPin} title="Deal info" subtitle="Type, source, property and budget"/>
+            <Grid>
               <div>
-                <Label required>Phone</Label>
-                <input
-                  value={form.phone}
-                  onChange={e => set('phone', e.target.value)}
-                  placeholder="01XXXXXXXXX"
-                  style={{ ...base, ...(errors.phone ? errStyle : {}) }}
-                  {...fieldFocus}
-                />
-                {errors.phone && <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>Required</p>}
+                <FieldLabel>Client type</FieldLabel>
+                <Select value={form.type} onChange={e=>set('type',e.target.value)}>
+                  {CLIENT_TYPES.map(o=><option key={o}>{o}</option>)}
+                </Select>
               </div>
               <div>
-                <Label>Alternative Number</Label>
-                <Input value={form.altPhone} onChange={e => set('altPhone', e.target.value)} placeholder="01XXXXXXXXX" />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label>Email</Label>
-                <Input value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@example.com" />
-              </div>
-            </div>
-          </SectionCard>
-
-          <div style={{ height: 14 }} />
-
-          {/* Deal Info */}
-          <SectionCard>
-            <SectionHeader icon={<MapPin size={15} />} title="Deal Info" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <Label>Client Type</Label>
-                <Sel value={form.type} onChange={e => set('type', e.target.value)}>
-                  {CLIENT_TYPES.map(o => <option key={o}>{o}</option>)}
-                </Sel>
-              </div>
-              <div>
-                <Label>Purpose</Label>
-                <Sel value={form.purpose} onChange={e => set('purpose', e.target.value)}>
+                <FieldLabel>Purpose</FieldLabel>
+                <Select value={form.purpose} onChange={e=>set('purpose',e.target.value)}>
                   <option value="">— Not specified —</option>
-                  {PURPOSES.map(o => <option key={o}>{o}</option>)}
-                </Sel>
+                  {PURPOSES.map(o=><option key={o}>{o}</option>)}
+                </Select>
               </div>
               <div>
-                <Label>Status</Label>
-                <Sel value={form.status} onChange={e => set('status', e.target.value)}>
-                  {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
-                </Sel>
+                <FieldLabel>Status</FieldLabel>
+                <Select value={form.status} onChange={e=>set('status',e.target.value)}>
+                  {STATUS_OPTIONS.map(o=><option key={o}>{o}</option>)}
+                </Select>
               </div>
               <div>
-                <Label>Source</Label>
-                <Sel value={form.source} onChange={e => set('source', e.target.value)}>
-                  {SOURCES.map(o => <option key={o}>{o}</option>)}
-                </Sel>
+                <FieldLabel>Source</FieldLabel>
+                <Select value={form.source} onChange={e=>set('source',e.target.value)}>
+                  {SOURCES.map(o=><option key={o}>{o}</option>)}
+                </Select>
               </div>
               <div>
-                <Label>Property Type</Label>
-                <Sel value={form.propertyType} onChange={e => set('propertyType', e.target.value)}>
-                  {PROPERTY_TYPES.map(o => <option key={o}>{o}</option>)}
-                </Sel>
+                <FieldLabel>Property type</FieldLabel>
+                <Select value={form.propertyType} onChange={e=>set('propertyType',e.target.value)}>
+                  {PROPERTY_TYPES.map(o=><option key={o}>{o}</option>)}
+                </Select>
               </div>
               <div>
-                <Label>Preferred Location</Label>
-                <Input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Gulshan, Dhaka" />
+                <FieldLabel>Preferred location</FieldLabel>
+                <Input value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Gulshan, Dhaka"/>
               </div>
               <div>
-                <Label>Budget Min (BDT)</Label>
-                <Input type="number" value={form.budgetMin} onChange={e => set('budgetMin', e.target.value)} placeholder="0" />
+                <FieldLabel>Budget min (BDT)</FieldLabel>
+                <Input type="number" value={form.budgetMin} onChange={e=>set('budgetMin',e.target.value)} placeholder="0"/>
               </div>
               <div>
-                <Label>Budget Max (BDT)</Label>
-                <Input type="number" value={form.budgetMax} onChange={e => set('budgetMax', e.target.value)} placeholder="0" />
+                <FieldLabel>Budget max (BDT)</FieldLabel>
+                <Input type="number" value={form.budgetMax} onChange={e=>set('budgetMax',e.target.value)} placeholder="0"/>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label>Address</Label>
-                <Input value={form.address} onChange={e => set('address', e.target.value)} placeholder="Full address" />
+              <div style={{ gridColumn:'1/-1' }}>
+                <FieldLabel>Address</FieldLabel>
+                <Input value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Full address"/>
               </div>
-            </div>
-          </SectionCard>
-
-          <div style={{ height: 14 }} />
+            </Grid>
+          </Card>
 
           {/* Requirements */}
-          <SectionCard style={{ background: 'var(--bg-muted, #f8fafc)' }}>
-            <SectionHeader icon={<LandPlot size={15} />} title="Requirements" description="What this client is looking for" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <Card style={{ background:C.surfaceRaised }}>
+            <CardHeader icon={LandPlot} title="Requirements" subtitle="What the client is specifically looking for"/>
+            <Grid>
               <div>
-                <Label><LandPlot size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Land Requirement</Label>
-                <Input value={form.reqLand} onChange={e => set('reqLand', e.target.value)} placeholder="e.g. wants 5 katha land" />
+                <FieldLabel>Land requirement</FieldLabel>
+                <Input value={form.reqLand} onChange={e=>set('reqLand',e.target.value)} placeholder="e.g. 5 katha land"/>
               </div>
               <div>
-                <Label><Home size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Flat Requirement</Label>
-                <Input value={form.reqFlat} onChange={e => set('reqFlat', e.target.value)} placeholder="e.g. wants 1500 sft flat" />
+                <FieldLabel>Flat requirement</FieldLabel>
+                <Input value={form.reqFlat} onChange={e=>set('reqFlat',e.target.value)} placeholder="e.g. 1500 sft flat"/>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label><Compass size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />Facing Preference</Label>
-                <Input value={form.reqFacing} onChange={e => set('reqFacing', e.target.value)} placeholder="e.g. South faced, Corner plot" />
+              <div style={{ gridColumn:'1/-1' }}>
+                <FieldLabel>Facing preference</FieldLabel>
+                <Input value={form.reqFacing} onChange={e=>set('reqFacing',e.target.value)} placeholder="South faced, Corner plot…"/>
               </div>
-            </div>
-          </SectionCard>
+            </Grid>
+          </Card>
 
-          <div style={{ height: 14 }} />
-
-          {/* Remarks */}
-          <SectionCard>
-            <SectionHeader icon={<MessageCircle size={15} />} title="Remarks" />
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={3}
-              placeholder="Additional notes about this client..."
-              style={{ ...base, resize: 'vertical', lineHeight: 1.5 }}
-              {...fieldFocus}
-            />
-          </SectionCard>
+          {/* Notes */}
+          <Card>
+            <CardHeader icon={MessageCircle} title="Remarks" subtitle="Anything else worth noting"/>
+            <Textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Additional notes about this client…"/>
+          </Card>
         </div>
 
-        {/* ── Modal Footer ── */}
-        <div style={{
-          display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10,
-          padding: '16px 24px',
-          borderTop: '1px solid var(--border, #e2e8f0)',
-          background: 'var(--bg-muted, #f8fafc)',
-          borderRadius: `0 0 ${t.radius.xl}px ${t.radius.xl}px`,
-          position: 'sticky', bottom: 0,
-        }}>
-          <button onClick={onClose} style={{
-            padding: '9px 20px', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-            border: '1.5px solid var(--border, #e2e8f0)',
-            background: 'var(--bg-card, #fff)',
-            color: 'var(--text, #374151)', cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-input, #f1f5f9)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card, #fff)'}
-          >
-            Cancel
-          </button>
-          <button onClick={handleSubmit} style={{
-            padding: '9px 22px', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-            border: 'none',
-            background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-            color: '#fff', cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
-            transition: 'opacity 0.15s, transform 0.1s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            {isEdit ? 'Save Changes' : 'Add Client'}
-          </button>
+        {/* Footer */}
+        <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
+          borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0,
+          display:'flex', justifyContent:'flex-end', gap:10 }}>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+          <PrimaryBtn onClick={handleSubmit}>{isEdit?'Save changes':'Add client'}</PrimaryBtn>
         </div>
       </motion.div>
     </motion.div>
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Delete confirmation modal
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
-  <motion.div
-    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    style={{
-      position: 'fixed', inset: 0,
-      background: 'rgba(15,23,42,0.6)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1200, padding: 20,
-    }}
-    onClick={onCancel}
-  >
-    <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 12, scale: 0.96 }}
-      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-      onClick={e => e.stopPropagation()}
-      style={{
-        background: 'var(--bg-card, #ffffff)',
-        borderRadius: t.radius.xl,
-        width: '100%', maxWidth: 420,
-        boxShadow: t.shadow.lg,
-        border: '1px solid var(--border, #e2e8f0)',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ padding: '26px 24px 20px', textAlign: 'center' }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: '50%',
-          background: 'rgba(239,68,68,0.1)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 14px',
-        }}>
-          <Trash2 size={22} color="#ef4444" />
+  <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+    style={{ position:'fixed', inset:0, background:'rgba(2,6,23,.7)', backdropFilter:'blur(6px)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1200, padding:20 }}
+    onClick={onCancel}>
+    <motion.div initial={{opacity:0,y:14,scale:.97}} animate={{opacity:1,y:0,scale:1}}
+      exit={{opacity:0,y:10,scale:.97}} transition={{duration:.18,ease:[.16,1,.3,1]}}
+      onClick={e=>e.stopPropagation()}
+      style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:400,
+        boxShadow:C.shadow.xl, overflow:'hidden' }}>
+      <div style={{ padding:'28px 24px 22px', textAlign:'center' }}>
+        <div style={{ width:52, height:52, borderRadius:'50%', background:C.redBg,
+          display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+          <Trash2 size={22} color={C.red}/>
         </div>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text, #0f172a)', margin: '0 0 6px' }}>
-          Delete this client?
-        </h3>
-        <p style={{ fontSize: 13, color: 'var(--text-muted, #64748b)', margin: 0 }}>
-          <strong>{client?.name}</strong> will be permanently removed from your client list. This can't be undone.
-        </p>
+        <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:8 }}>Remove this client?</div>
+        <div style={{ fontSize:13.5, color:C.textMid, lineHeight:1.5 }}>
+          <strong>{client?.name}</strong> will be permanently deleted. This cannot be undone.
+        </div>
       </div>
-      <div style={{
-        display: 'flex', gap: 10, padding: '16px 24px',
-        borderTop: '1px solid var(--border, #e2e8f0)',
-        background: 'var(--bg-muted, #f8fafc)',
-      }}>
-        <button onClick={onCancel} style={{
-          flex: 1, padding: '9px 0', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-          border: '1.5px solid var(--border, #e2e8f0)',
-          background: 'var(--bg-card, #fff)',
-          color: 'var(--text, #374151)', cursor: 'pointer',
-          transition: 'background 0.15s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-input, #f1f5f9)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card, #fff)'}
-        >
-          Cancel
-        </button>
-        <button onClick={onConfirm} style={{
-          flex: 1, padding: '9px 0', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-          border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(239,68,68,0.35)',
-          transition: 'opacity 0.15s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-        >
+      <div style={{ display:'flex', gap:10, padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised }}>
+        <GhostBtn onClick={onCancel} style={{ flex:1, justifyContent:'center' }}>Cancel</GhostBtn>
+        <button onClick={onConfirm} style={{ flex:1, padding:'9px 0', borderRadius:C.r.md,
+          fontSize:13.5, fontWeight:700, border:'none', background:C.red, color:'#fff', cursor:'pointer',
+          boxShadow:`0 2px 8px ${C.red}44`, transition:'opacity .12s' }}
+          onMouseEnter={e=>e.currentTarget.style.opacity='.85'}
+          onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
           Delete
         </button>
       </div>
@@ -724,834 +602,563 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
   </motion.div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Take Call Modal — operates on a client record from db.clients now, with
-// fields mapped to that shape (phone instead of mobile, propertyType instead
-// of project, etc.) but the same UX as before.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Take Call Modal ──────────────────────────────────────────────────────────
 const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
-  const [followupEnabled, setFollowupEnabled] = useState(Boolean(lead.followupDate));
-
-  const toggleFollowup = () => {
-    const next = !followupEnabled;
-    setFollowupEnabled(next);
-    if (!next) onChange('followupDate', '');
-  };
-
+  const [fuOn, setFuOn] = useState(Boolean(lead.followupDate));
+  const toggleFu = () => { const n=!fuOn; setFuOn(n); if(!n) onChange('followupDate',''); };
+  const reqSummary = [lead.reqLand,lead.reqFlat,lead.reqFacing].filter(Boolean).join(' · ');
   const telLink = lead.phone ? `tel:${lead.phone}` : null;
-  const waLink = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g, '')}` : null;
-  const reqSummary = [lead.reqLand, lead.reqFlat, lead.reqFacing].filter(Boolean).join(' • ');
+  const waLink  = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g,'')}` : null;
+  const ready   = Boolean(lead.coStatus);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(15,23,42,0.6)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1000, padding: 20,
-      }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 16, scale: 0.96 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--bg-card, #ffffff)',
-          borderRadius: t.radius.xl,
-          width: '100%', maxWidth: 720,
-          maxHeight: '92vh', overflowY: 'auto',
-          boxShadow: t.shadow.lg,
-          border: '1px solid var(--border, #e2e8f0)',
-        }}
-      >
-        {/* ── Header ── */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-          padding: '18px 24px',
-          background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-          borderRadius: `${t.radius.xl}px ${t.radius.xl}px 0 0`,
-          position: 'sticky', top: 0, zIndex: 10,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Avatar name={lead.name} size={38} />
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{ position:'fixed', inset:0, background:'rgba(2,6,23,.72)', backdropFilter:'blur(6px)',
+        display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}
+      onClick={onClose}>
+      <motion.div initial={{opacity:0,y:22,scale:.97}} animate={{opacity:1,y:0,scale:1}}
+        exit={{opacity:0,y:14,scale:.97}} transition={{duration:.22,ease:[.16,1,.3,1]}}
+        onClick={e=>e.stopPropagation()}
+        style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:820,
+          maxHeight:'93vh', overflowY:'auto', boxShadow:C.shadow.xl }}>
+
+        {/* Header */}
+        <div style={{ padding:'20px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+          borderRadius:`${C.r.xl}px ${C.r.xl}px 0 0`, position:'sticky', top:0, zIndex:10,
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <Avatar name={lead.name} size={42}/>
             <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0 }}>
-                {lead.name}
-              </h2>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {lead.propertyType && <Pill>{lead.propertyType}</Pill>}
-                {lead.source && <Pill>{lead.source}</Pill>}
-                {lead.purpose && <Pill>{lead.purpose}</Pill>}
+              <div style={{ fontSize:16, fontWeight:700, color:'#fff', letterSpacing:'-.01em' }}>{lead.name}</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:5 }}>
+                {lead.propertyType && <HeaderPill>{lead.propertyType}</HeaderPill>}
+                {lead.source       && <HeaderPill>{lead.source}</HeaderPill>}
+                {lead.purpose      && <HeaderPill>{lead.purpose}</HeaderPill>}
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff',
-              cursor: 'pointer', width: 30, height: 30, borderRadius: t.radius.sm, flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-          >
-            <X size={16} />
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:C.r.sm, border:'none',
+            background:'rgba(255,255,255,.15)', color:'#fff', cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <X size={15}/>
           </button>
         </div>
 
-        <div style={{ padding: '20px 24px' }}>
+        <div style={{ padding:'22px 24px', display:'flex', flexDirection:'column', gap:16 }}>
 
-          {/* ── Quick contact actions ── */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          {/* Quick dial */}
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
             {telLink && (
-              <a href={telLink} style={actionBtnPrimary}>
-                <PhoneCall size={15} /> Call {lead.phone}
+              <a href={telLink} style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'10px 18px',
+                borderRadius:C.r.md, fontSize:13.5, fontWeight:700, textDecoration:'none',
+                background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+                color:'#fff', boxShadow:`0 2px 10px ${C.accent}44` }}>
+                <PhoneCall size={15}/> Call {lead.phone}
               </a>
             )}
             {waLink && (
-              <a href={waLink} target="_blank" rel="noopener noreferrer" style={actionBtnSecondary}>
-                <MessageCircle size={15} /> WhatsApp
+              <a href={waLink} target="_blank" rel="noopener noreferrer"
+                style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'10px 18px',
+                  borderRadius:C.r.md, fontSize:13.5, fontWeight:700, textDecoration:'none',
+                  background:'#F0FDF4', color:'#16A34A', border:'1.5px solid #BBF7D0' }}>
+                <MessageCircle size={15}/> WhatsApp
               </a>
             )}
           </div>
 
-          {/* ── Locked client record — collapsed by default to cut clutter ── */}
-          <CollapsibleSection
-            title="Client details"
-            icon={<User size={14} />}
-            summary={`${lead.phone || 'no phone'} · ${lead.email || 'no email'}`}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+          {/* Client details (collapsed) */}
+          <Collapse title="Client details" icon={User}
+            summary={[lead.phone,lead.email].filter(Boolean).join(' · ')}>
+            <Grid cols="repeat(3,1fr)">
               {[
-                { label: 'Phone', value: lead.phone },
-                { label: 'Alt. Number', value: lead.altPhone },
-                { label: 'Email', value: lead.email },
-                { label: 'Address', value: lead.address },
-                { label: 'Profession', value: lead.profession },
-                { label: 'Designation', value: lead.designation },
-                { label: 'Company', value: lead.company },
-                { label: 'Budget', value: (lead.budgetMin || lead.budgetMax) ? `${lead.budgetMin || '0'} – ${lead.budgetMax || '0'}` : '' },
-                { label: 'Location', value: lead.location },
-              ].map(f => (
+                {label:'Phone',      value:lead.phone},
+                {label:'Alt. number',value:lead.altPhone},
+                {label:'Email',      value:lead.email},
+                {label:'Address',    value:lead.address},
+                {label:'Profession', value:lead.profession},
+                {label:'Company',    value:lead.company},
+                {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
+                {label:'Location',   value:lead.location},
+              ].map(f=>(
                 <div key={f.label}>
-                  <Label>{f.label}</Label>
-                  <ROField value={f.value} />
+                  <FieldLabel>{f.label}</FieldLabel>
+                  <ROField value={f.value}/>
                 </div>
               ))}
+            </Grid>
+            {reqSummary && <div style={{ marginTop:14 }}><FieldLabel>Requirements</FieldLabel><ROField value={reqSummary}/></div>}
+          </Collapse>
+
+          {/* Two-column content */}
+          <Grid cols="1fr 1fr" gap={16}>
+
+            {/* LEFT — what happened */}
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <Card>
+                <CardHeader icon={PhoneCall} title="Call outcome" subtitle="What happened when you called"/>
+                <div style={{ marginBottom:14 }}>
+                  <OutcomePicker value={lead.coStatus||''} onChange={v=>onChange('coStatus',v)}/>
+                </div>
+                <div style={{ marginBottom:14 }}>
+                  <FieldLabel>Method used</FieldLabel>
+                  <MethodPicker value={lead.coMethod||'Call'} onChange={v=>onChange('coMethod',v)}/>
+                </div>
+                <FieldLabel>Notes from this call</FieldLabel>
+                <Textarea value={lead.coComment||''} onChange={e=>onChange('coComment',e.target.value)}
+                  placeholder="What was discussed, client's reaction, key details…"/>
+              </Card>
+
+              <Card>
+                <CardHeader icon={Gift} title="Offer discussed" subtitle={`Property: ${lead.propertyType||'—'}`}/>
+                <Select value={lead.offers||''} onChange={e=>onChange('offers',e.target.value)}>
+                  <option value="">None selected</option>
+                  <option value="projects">Projects</option>
+                  <option value="land_flat">Land / Flat Plan</option>
+                  <option value="site_visit">Free Site Visit</option>
+                </Select>
+              </Card>
             </div>
-            {reqSummary && (
-              <div style={{ marginTop: 14 }}>
-                <Label>Requirements</Label>
-                <ROField value={reqSummary} />
-              </div>
-            )}
-          </CollapsibleSection>
 
-          <div style={{ height: 16 }} />
+            {/* RIGHT — what's next */}
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <Card>
+                <CardHeader icon={CheckCircle2} title="Lead status" subtitle="Update after this call"/>
+                <div style={{ marginBottom:14 }}>
+                  <LeadStatusPicker value={lead.callStatus||'New'} onChange={v=>onChange('callStatus',v)}/>
+                </div>
+                <FieldLabel>Conversion probability</FieldLabel>
+                <div style={{ position:'relative', marginBottom:10 }}>
+                  <Input type="number" min="0" max="100"
+                    value={lead.percentage??0} onChange={e=>onChange('percentage',Number(e.target.value))}
+                    style={{ paddingRight:28 }}/>
+                  <span style={{ position:'absolute', right:11, top:'50%', transform:'translateY(-50%)',
+                    fontSize:13, color:C.textMuted, pointerEvents:'none' }}>%</span>
+                </div>
+                <div style={{ height:5, borderRadius:C.r.full, background:C.border, overflow:'hidden' }}>
+                  <div style={{ height:'100%', borderRadius:C.r.full, transition:'width .3s',
+                    width:`${Math.min(100,Math.max(0,lead.percentage||0))}%`,
+                    background:`linear-gradient(90deg,${C.accentDark},${C.accent})` }}/>
+                </div>
+              </Card>
 
-          {/* ── Call Outcome ── */}
-          <SectionCard>
-            <SectionHeader icon={<PhoneCall size={15} />} title="Call Outcome" description="What happened on this call" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div>
-                <Label>Status</Label>
-                <Sel value={lead.coStatus || 'Busy'} onChange={e => onChange('coStatus', e.target.value)}>
-                  <option>Busy</option>
-                  <option>Answered</option>
-                  <option>No Answer</option>
-                  <option>Switched Off</option>
-                  <option>Wrong Number</option>
-                </Sel>
-              </div>
-              <div>
-                <Label>Method</Label>
-                <Sel value={lead.coMethod || 'Call'} onChange={e => onChange('coMethod', e.target.value)}>
-                  <option>Call</option>
-                  <option>WhatsApp</option>
-                  <option>SMS</option>
-                  <option>Email</option>
-                </Sel>
-              </div>
-            </div>
-            <Label>Notes</Label>
-            <textarea
-              value={lead.coComment || ''}
-              onChange={e => onChange('coComment', e.target.value)}
-              rows={3}
-              placeholder="Notes from this call..."
-              style={{ ...base, resize: 'vertical', lineHeight: 1.5 }}
-              {...fieldFocus}
-            />
-          </SectionCard>
-
-          <div style={{ height: 14 }} />
-
-          {/* ── Offer Discussed ── */}
-          <SectionCard>
-            <SectionHeader
-              icon={<Gift size={15} />}
-              title="Offer Discussed"
-              description={`Property: ${lead.propertyType || '—'}`}
-            />
-            <Label>Offers</Label>
-            <Sel value={lead.offers || ''} onChange={e => onChange('offers', e.target.value)}>
-              <option value="">None selected</option>
-              <option value="discount">Projects</option>
-              <option value="installment">Land/Flat Plan</option>
-              <option value="free_visit">Free Site Visit</option>
-            </Sel>
-          </SectionCard>
-
-          <div style={{ height: 14 }} />
-
-          {/* ── Schedule Follow-up — collapses away when not needed ── */}
-          <SectionCard>
-            <SectionHeader
-              icon={<Calendar size={15} />}
-              title="Schedule Follow-up"
-              description="Moves this lead to the Follow Up list when you submit"
-              action={<Toggle checked={followupEnabled} onChange={toggleFollowup} />}
-            />
-            {followupEnabled ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <Label>Followup Date</Label>
-                    <input
-                      type="date"
-                      value={lead.followupDate || ''}
-                      onChange={e => onChange('followupDate', e.target.value)}
-                      style={base} {...fieldFocus}
-                    />
+              {/* Follow-up */}
+              <Card style={{ background:fuOn?'#FFFDF7':C.surface }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:fuOn?16:0 }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                    <div style={{ width:32, height:32, borderRadius:C.r.sm,
+                      background:fuOn?C.accentLight:C.surfaceSunken,
+                      color:fuOn?C.accentDark:C.textMuted,
+                      display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <Calendar size={15}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>Schedule follow-up</div>
+                      <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>Adds to the Follow Up list on submit</div>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Followup Type</Label>
-                    <Sel value={lead.followupType || 'Regular'} onChange={e => onChange('followupType', e.target.value)}>
-                      <option>Regular</option>
-                      <option>Priority</option>
-                      <option>Site Visit</option>
-                    </Sel>
+                  <Toggle checked={fuOn} onChange={toggleFu}/>
+                </div>
+                <AnimatePresence>
+                  {fuOn && (
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}}
+                      exit={{opacity:0,height:0}} style={{overflow:'hidden'}}>
+                      <Grid>
+                        <div>
+                          <FieldLabel>Date</FieldLabel>
+                          <Input type="date" value={lead.followupDate||''} onChange={e=>onChange('followupDate',e.target.value)}/>
+                        </div>
+                        <div>
+                          <FieldLabel>Type</FieldLabel>
+                          <Select value={lead.followupType||'Regular'} onChange={e=>onChange('followupType',e.target.value)}>
+                            <option>Regular</option><option>Priority</option><option>Site Visit</option>
+                          </Select>
+                        </div>
+                      </Grid>
+                      <div style={{ marginTop:12, marginBottom:12 }}>
+                        <FieldLabel>Assign to</FieldLabel>
+                        <Select value={lead.followupCaller||user?.firstName||'Admin'} onChange={e=>onChange('followupCaller',e.target.value)}>
+                          <option>{user?.firstName||'Admin'}</option>
+                          <option>Admin 1</option>
+                          <option>Agent 1</option>
+                        </Select>
+                      </div>
+                      <FieldLabel>Follow-up note</FieldLabel>
+                      <Textarea value={lead.followupNote||''} onChange={e=>onChange('followupNote',e.target.value)}
+                        placeholder="What to discuss on the next call…" style={{ minHeight:64 }}/>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {!fuOn && (
+                  <div style={{ fontSize:12, color:C.textMuted, fontStyle:'italic' }}>
+                    Toggle on to set a date and keep this client on your radar.
                   </div>
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <Label>Followup Caller</Label>
-                  <Sel value={lead.followupCaller || user?.firstName || 'Admin 2'} onChange={e => onChange('followupCaller', e.target.value)}>
-                    <option>{user?.firstName || 'Admin 2'}</option>
-                    <option>Admin 1</option>
-                    <option>Agent 1</option>
-                  </Sel>
-                </div>
-                <Label>Followup Note</Label>
-                <textarea
-                  value={lead.followupNote || ''}
-                  onChange={e => onChange('followupNote', e.target.value)}
-                  rows={2}
-                  placeholder="Add a note for the followup..."
-                  style={{ ...base, resize: 'vertical', lineHeight: 1.5 }}
-                  {...fieldFocus}
-                />
-              </>
-            ) : (
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted, #94a3b8)', margin: 0, fontStyle: 'italic' }}>
-                No follow-up scheduled. Turn this on to set a date and keep this lead on your radar.
-              </p>
-            )}
-          </SectionCard>
+                )}
+              </Card>
 
-          <div style={{ height: 14 }} />
-
-          {/* ── Lead Status ── */}
-          <SectionCard>
-            <SectionHeader icon={<CheckCircle2 size={15} />} title="Lead Status" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
-              <div>
-                <Label>Status</Label>
-                <Sel value={lead.callStatus || 'New'} onChange={e => onChange('callStatus', e.target.value)}>
-                  <option>New</option>
-                  <option>Contacted</option>
-                  <option>Interested</option>
-                  <option>Not Interested</option>
-                  <option>Converted</option>
-                  <option>Dropped</option>
-                </Sel>
-              </div>
-              <div>
-                <Label>Conversion %</Label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="number" min="0" max="100"
-                    value={lead.percentage ?? 0}
-                    onChange={e => onChange('percentage', Number(e.target.value))}
-                    style={{ ...base, paddingRight: 32 }}
-                    {...fieldFocus}
-                  />
-                  <span style={{
-                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                    fontSize: 13, color: 'var(--text-muted, #94a3b8)', pointerEvents: 'none',
-                  }}>%</span>
-                </div>
-              </div>
+              <Collapse title="More options" icon={Filter} summary="Visit scheduling — coming soon">
+                <div style={{ fontSize:13, color:C.textMuted }}>Visit scheduling isn't available yet.</div>
+              </Collapse>
             </div>
-            <div style={{
-              marginTop: 12, height: 6, borderRadius: 99,
-              background: 'var(--bg-muted, #e2e8f0)', overflow: 'hidden',
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${Math.min(100, Math.max(0, lead.percentage || 0))}%`,
-                background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
-                borderRadius: 99, transition: 'width 0.3s',
-              }} />
-            </div>
-          </SectionCard>
-
-          <div style={{ height: 14 }} />
-
-          {/* ── Future capabilities, kept out of the way until they're built ── */}
-          <CollapsibleSection
-            title="More options"
-            icon={<Filter size={14} />}
-            summary="Visit scheduling — coming soon"
-          >
-            <p style={{ fontSize: 12.5, color: 'var(--text-muted, #94a3b8)', margin: 0 }}>
-              Visit scheduling for this lead isn't available yet.
-            </p>
-          </CollapsibleSection>
+          </Grid>
         </div>
 
-        {/* ── Footer ── */}
-        <div style={{
-          display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10,
-          padding: '16px 24px',
-          borderTop: '1px solid var(--border, #e2e8f0)',
-          background: 'var(--bg-muted, #f8fafc)',
-          borderRadius: `0 0 ${t.radius.xl}px ${t.radius.xl}px`,
-          position: 'sticky', bottom: 0, zIndex: 10,
-        }}>
-          <button onClick={onClose} style={{
-            padding: '9px 20px', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-            border: '1.5px solid var(--border, #e2e8f0)',
-            background: 'var(--bg-card, #fff)',
-            color: 'var(--text, #374151)', cursor: 'pointer',
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-input, #f1f5f9)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card, #fff)'}
-          >
-            Close
-          </button>
-          <button
-            onClick={onSubmit}
-            style={{
-              padding: '9px 22px', borderRadius: t.radius.md, fontSize: 13.5, fontWeight: 600,
-              border: 'none',
-              background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-              color: '#fff', cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
-              transition: 'opacity 0.15s, transform 0.1s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            {followupEnabled ? 'Log Call & Schedule Follow-up' : 'Log Call'}
-          </button>
+        {/* Footer */}
+        <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
+          borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0, zIndex:10,
+          display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+          <div style={{ fontSize:13, color:ready?C.green:C.textMuted, display:'flex', alignItems:'center', gap:6 }}>
+            {ready
+              ? <><CheckCircle2 size={14} color={C.green}/> Ready — logging as <strong>{lead.coStatus}</strong></>
+              : <>Pick a call outcome to continue</>
+            }
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <GhostBtn onClick={onClose}>Close</GhostBtn>
+            <PrimaryBtn onClick={onSubmit}>
+              {fuOn ? 'Log call & schedule follow-up' : 'Log call'}
+              <ArrowRight size={14}/>
+            </PrimaryBtn>
+          </div>
         </div>
       </motion.div>
     </motion.div>
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pagination button
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Pagination button ────────────────────────────────────────────────────────
 const PageBtn = ({ active, disabled, onClick, children }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    style={{
-      minWidth: 34, height: 32, padding: '0 10px',
-      borderRadius: t.radius.sm,
-      border: active ? 'none' : '1.5px solid var(--border, #e2e8f0)',
-      background: active
-        ? 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)'
-        : 'var(--bg-card, #fff)',
-      color: active ? '#fff' : disabled ? 'var(--text-muted, #cbd5e1)' : 'var(--text, #374151)',
-      fontSize: 12.5, fontWeight: 600,
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.5 : 1,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
-      boxShadow: active ? '0 2px 6px rgba(59,130,246,0.3)' : 'none',
-      transition: 'all 0.15s',
-    }}
-  >
-    {children}
-  </button>
+  <button onClick={onClick} disabled={disabled} style={{
+    minWidth:32, height:30, padding:'0 9px', borderRadius:C.r.sm,
+    border: active?'none':`1.5px solid ${C.border}`,
+    background: active ? `linear-gradient(135deg,${C.accentDark},${C.accent})` : C.surface,
+    color: active?'#fff':disabled?C.textMuted:C.text,
+    fontSize:12.5, fontWeight:600, cursor:disabled?'not-allowed':'pointer',
+    opacity:disabled?.5:1, display:'flex', alignItems:'center', justifyContent:'center', gap:2,
+    boxShadow:active?`0 2px 6px ${C.accent}44`:'none', transition:'all .13s',
+  }}>{children}</button>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Overview stat card
-// ─────────────────────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, color }) => (
-  <div style={{
-    flex: '1 1 130px', minWidth: 130,
-    background: 'var(--bg-card, #fff)', border: '1.5px solid var(--border, #e2e8f0)',
-    borderRadius: t.radius.lg, padding: '14px 16px',
-    display: 'flex', flexDirection: 'column', gap: 4,
-    borderLeft: color ? `3px solid ${color}` : undefined,
-  }}>
-    <span style={{
-      fontSize: 11, fontWeight: 700, color: 'var(--text-muted, #94a3b8)',
-      textTransform: 'uppercase', letterSpacing: '0.05em',
-    }}>
-      {label}
-    </span>
-    <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--text, #0f172a)' }}>{value}</span>
-  </div>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main NewCall component — now reads from db.clients (same source as
-// Manage Clients & Import Clients) instead of a separate callQueue.
-// A client is in the "New Call" queue as long as it has no `calledAt` value.
-// Taking a call sets `calledAt`, which hides it from this queue while it
-// remains fully visible (and editable) in Manage Clients.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────────────────────
 const NewCall = ({ db, setDb, logAction, user }) => {
-  const [search, setSearch] = useState('');
+  const [search,       setSearch]       = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [activeLead, setActiveLead] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
+  const [page,         setPage]         = useState(1);
+  const [pageSize,     setPageSize]     = useState(10);
+  const [activeLead,   setActiveLead]   = useState(null);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [editTarget,   setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [hoveredRow, setHoveredRow] = useState(null);
+  const [hoveredRow,   setHoveredRow]   = useState(null);
 
   const allClients = db?.clients || [];
-  // Only clients that haven't been called yet show up in the New Call queue.
-  const queue = useMemo(() => allClients.filter(c => !c.calledAt), [allClients]);
+  const queue = useMemo(() => allClients.filter(c=>!c.calledAt), [allClients]);
 
   const stats = useMemo(() => {
-    const bySource = queue.reduce((acc, item) => {
-      const s = item.source || 'Other';
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
-    return { total: queue.length, bySource };
+    const bySource = {};
+    queue.forEach(c => { const s=c.source||'Other'; bySource[s]=(bySource[s]||0)+1; });
+    return { total:queue.length, bySource };
   }, [queue]);
 
   const filtered = useMemo(() => {
-    let list = queue;
-    if (sourceFilter !== 'All') list = list.filter(item => item.source === sourceFilter);
+    let list = sourceFilter==='All' ? queue : queue.filter(c=>c.source===sourceFilter);
     if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(item =>
-        item.name?.toLowerCase().includes(q) ||
-        item.phone?.toLowerCase().includes(q) ||
-        String(item.id).includes(q) ||
-        item.propertyType?.toLowerCase().includes(q) ||
-        item.source?.toLowerCase().includes(q) ||
-        item.company?.toLowerCase().includes(q)
+      const q=search.toLowerCase();
+      list = list.filter(c =>
+        c.name?.toLowerCase().includes(q) || c.phone?.includes(q) ||
+        c.propertyType?.toLowerCase().includes(q) || c.source?.toLowerCase().includes(q) ||
+        c.company?.toLowerCase().includes(q) || String(c.id).includes(q)
       );
     }
     return list;
   }, [queue, search, sourceFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1,Math.ceil(filtered.length/pageSize));
+  const pageItems  = filtered.slice((page-1)*pageSize, page*pageSize);
 
   const openTakeCall = lead => setActiveLead({
-    ...lead,
-    coComment: '', coStatus: 'Busy', coMethod: 'Call',
-    followupDate: '', followupType: 'Regular',
-    followupCaller: user?.firstName || 'Admin 2',
-    followupNote: '', callStatus: 'New', percentage: 0,
+    ...lead, coComment:'', coStatus:'', coMethod:'Call',
+    followupDate:'', followupType:'Regular',
+    followupCaller:user?.firstName||'Admin',
+    followupNote:'', callStatus:'New', percentage:0,
   });
-  const closeTakeCall = () => setActiveLead(null);
-  const updateActiveLead = (field, value) =>
-    setActiveLead(prev => ({ ...prev, [field]: value }));
+  const updateActive = (k,v) => setActiveLead(p=>({...p,[k]:v}));
 
-  // Maps the in-call "Followup Type" to the priority levels used on the Follow Up page
-  const followupPriorityMap = { Priority: 'high', 'Site Visit': 'medium', Regular: 'low' };
+  const followupPriorityMap = { Priority:'high','Site Visit':'medium',Regular:'low' };
 
-  const submitTakeCall = () => {
+  const submitCall = () => {
     if (!activeLead) return;
-
+    const now = new Date().toISOString();
     const entry = {
-      id: Date.now(),
-      clientName: activeLead.name,
-      phone: activeLead.phone,
-      email: activeLead.email || '',
-      subject: `${activeLead.propertyType || ''} — Lead follow-up`.trim(),
-      priority: 'medium',
-      notes: activeLead.coComment || '',
-      agent: user?.firstName || 'Unknown',
-      type: 'inbound', duration: 0,
-      date: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-      timestamp: new Date().toISOString(),
-      propertyType: activeLead.propertyType,
-      source: activeLead.source,
-      callStatus: activeLead.callStatus,
+      id:Date.now(), clientName:activeLead.name, phone:activeLead.phone,
+      email:activeLead.email||'',
+      subject:`${activeLead.propertyType||''} — Lead follow-up`.trim(),
+      priority:'medium', notes:activeLead.coComment||'',
+      agent:user?.firstName||'Unknown', type:'inbound', duration:0,
+      date:new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}),
+      timestamp:now, propertyType:activeLead.propertyType, source:activeLead.source,
+      callStatus:activeLead.callStatus,
     };
-
-    // A follow-up date being set means this call should graduate into the Follow Up list
-    const hasFollowup = Boolean(activeLead.followupDate);
-    const calledAtIso = new Date().toISOString();
-
+    const hasFu = Boolean(activeLead.followupDate);
     setDb(prev => {
       const next = {
         ...prev,
-        callLogs: [entry, ...(prev.callLogs || [])],
-        // Mark this client as called so it drops out of the New Call queue
-        // while staying fully intact (and visible) in Manage Clients.
-        clients: (prev.clients || []).map(c =>
-          c.id === activeLead.id
-            ? { ...c, calledAt: calledAtIso, status: activeLead.callStatus === 'Converted' ? 'Closed' : c.status }
+        callLogs:[entry,...(prev.callLogs||[])],
+        clients:(prev.clients||[]).map(c =>
+          c.id===activeLead.id
+            ? {...c, calledAt:now, status:activeLead.callStatus==='Converted'?'Closed':c.status}
             : c
         ),
       };
-
-      if (hasFollowup) {
-        const followUpEntry = {
-          id: Date.now() + 1,
-          client: activeLead.name,
-          phone: activeLead.phone,
-          subject: activeLead.followupNote?.trim()
-            || `${activeLead.propertyType || 'Lead'} follow-up (${activeLead.followupType || 'Regular'})`,
-          dueDate: activeLead.followupDate,
-          priority: followupPriorityMap[activeLead.followupType] || 'medium',
-          status: 'pending',
-          createdBy: activeLead.followupCaller || user?.firstName || 'Admin',
-        };
-        next.followUps = [followUpEntry, ...(prev.followUps || [])];
+      if (hasFu) {
+        next.followUps = [{
+          id:Date.now()+1, client:activeLead.name, phone:activeLead.phone,
+          subject:activeLead.followupNote?.trim()||`${activeLead.propertyType||'Lead'} follow-up`,
+          dueDate:activeLead.followupDate,
+          priority:followupPriorityMap[activeLead.followupType]||'medium',
+          status:'pending', createdBy:activeLead.followupCaller||user?.firstName||'Admin',
+        }, ...(prev.followUps||[])];
       }
-
       return next;
     });
-
-    logAction?.(
-      hasFollowup ? 'Took call & scheduled follow-up' : 'Took call from queue',
-      'Call',
-      activeLead.name
-    );
-    closeTakeCall();
+    logAction?.(hasFu?'Took call & scheduled follow-up':'Took call','Call',activeLead.name);
+    setActiveLead(null);
   };
 
-  // ── Add / Edit / Delete now operate directly on db.clients ──────────────
-  const handleAddClient = newClient => {
-    setDb(prev => ({ ...prev, clients: [newClient, ...(prev.clients || [])] }));
-    logAction?.('Added new client', 'Client', newClient.name);
+  const addClient = c => {
+    setDb(prev=>({...prev,clients:[c,...(prev.clients||[])]}));
+    logAction?.('Added client','Client',c.name);
   };
-
-  const handleEditClient = updatedClient => {
-    setDb(prev => ({
-      ...prev,
-      clients: (prev.clients || []).map(c => c.id === updatedClient.id ? updatedClient : c),
-    }));
-    logAction?.('Updated client', 'Client', updatedClient.name);
+  const editClient = c => {
+    setDb(prev=>({...prev,clients:(prev.clients||[]).map(x=>x.id===c.id?c:x)}));
+    logAction?.('Updated client','Client',c.name);
   };
-
   const confirmDelete = () => {
     if (!deleteTarget) return;
-    setDb(prev => ({
-      ...prev,
-      clients: (prev.clients || []).filter(c => c.id !== deleteTarget.id),
-    }));
-    logAction?.('Deleted client', 'Client', deleteTarget.name);
+    setDb(prev=>({...prev,clients:(prev.clients||[]).filter(c=>c.id!==deleteTarget.id)}));
+    logAction?.('Deleted client','Client',deleteTarget.name);
     setDeleteTarget(null);
   };
 
-  const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
-    .filter(p => Math.abs(p - page) <= 2 || p === 1 || p === totalPages)
-    .reduce((acc, p, idx, arr) => {
-      if (idx > 0 && p - arr[idx - 1] > 1) acc.push('...');
-      acc.push(p);
-      return acc;
-    }, []);
+  const pageNums = Array.from({length:totalPages},(_,i)=>i+1)
+    .filter(p=>Math.abs(p-page)<=2||p===1||p===totalPages)
+    .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.22 }}
-    >
-      {/* ── Page Header ── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: 18, flexWrap: 'wrap', gap: 12,
-      }}>
+    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.2}}
+      style={{ fontFamily:'-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif', color:C.text }}>
+
+      {/* ── Page header ── */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+        marginBottom:22, flexWrap:'wrap', gap:14 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text, #0f172a)', margin: '0 0 4px' }}>
-            New Calls
-          </h1>
-          <p style={{ color: 'var(--text-muted, #64748b)', fontSize: 13.5, margin: 0 }}>
-            Clients awaiting a first call — synced with your full client list
+          <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:4 }}>
+            <div style={{ width:30, height:30, borderRadius:C.r.sm,
+              background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Phone size={15} color="#fff"/>
+            </div>
+            <h1 style={{ fontSize:22, fontWeight:800, color:C.text, margin:0, letterSpacing:'-.02em' }}>
+              New Calls
+            </h1>
+          </div>
+          <p style={{ fontSize:13.5, color:C.textMuted, margin:0 }}>
+            Clients awaiting first contact — {queue.length} in queue
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '10px 20px', borderRadius: t.radius.md,
-            fontSize: 13.5, fontWeight: 600, border: 'none',
-            background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-            color: '#fff', cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
-            transition: 'opacity 0.15s, transform 0.1s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
-        >
-          <Plus size={16} />
-          Add New Client
-        </button>
+        <PrimaryBtn onClick={()=>setShowAdd(true)} style={{ gap:8 }}>
+          <Plus size={15}/> Add client
+        </PrimaryBtn>
       </div>
 
-      {/* ── Overview stats — colours match the source badges below for a single, consistent system ── */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <StatCard label="Total Leads" value={stats.total} color="#3b82f6" />
-        {Object.entries(sourcePalette).map(([src, pal]) => (
-          <StatCard key={src} label={src} value={stats.bySource[src] || 0} color={pal.color} />
+      {/* ── Inline stat chips ── */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:20 }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px',
+          borderRadius:C.r.full, background:C.accentLight, border:`1px solid ${C.accentBorder}`,
+          fontSize:12.5, fontWeight:700, color:C.accentDark }}>
+          <Zap size={12}/> {stats.total} total
+        </div>
+        {Object.entries(SOURCE_PALETTE).map(([src,pal]) => stats.bySource[src]>0 && (
+          <button key={src}
+            onClick={()=>{ setSourceFilter(p=>p===src?'All':src); setPage(1); }}
+            style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 11px',
+              borderRadius:C.r.full, cursor:'pointer', fontSize:12, fontWeight:600,
+              background: sourceFilter===src ? pal.bg : '#fff',
+              color: sourceFilter===src ? pal.color : C.textMid,
+              border:`1.5px solid ${sourceFilter===src ? pal.border : C.border}`,
+              transition:'all .12s' }}>
+            <span style={{ width:7, height:7, borderRadius:'50%', background:SOURCE_ACCENT[src], flexShrink:0 }}/>
+            {src} <strong>{stats.bySource[src]}</strong>
+          </button>
         ))}
       </div>
 
-      {/* ── Table Card ── */}
-      <div style={{
-        background: 'var(--bg-card, #fff)',
-        border: '1.5px solid var(--border, #e2e8f0)',
-        borderRadius: t.radius.lg,
-        overflow: 'hidden',
-        boxShadow: t.shadow.sm,
-      }}>
+      {/* ── Table card ── */}
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`,
+        borderRadius:C.r.lg, overflow:'hidden', boxShadow:C.shadow.md }}>
+
         {/* Controls bar */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: 12,
-          padding: '14px 18px',
-          borderBottom: '1px solid var(--border, #e2e8f0)',
-          background: 'var(--bg-muted, #f8fafc)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--text-muted, #64748b)' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+          flexWrap:'wrap', gap:12, padding:'13px 18px',
+          borderBottom:`1px solid ${C.border}`, background:C.surfaceRaised }}>
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, color:C.textMid }}>
               Show
-              <select
-                value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-                style={{
-                  background: 'var(--bg-card, #fff)',
-                  border: '1.5px solid var(--border, #e2e8f0)',
-                  borderRadius: t.radius.sm,
-                  padding: '5px 10px', fontSize: 13,
-                  color: 'var(--text, #374151)',
-                  cursor: 'pointer', outline: 'none',
-                  fontWeight: 500,
-                }}
-              >
-                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              <select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}
+                style={{ ...inputBase, width:'auto', padding:'5px 9px', fontSize:13, cursor:'pointer', appearance:'none' }}>
+                {[10,25,50,100].map(n=><option key={n}>{n}</option>)}
               </select>
               entries
             </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--text-muted, #64748b)' }}>
-              <Filter size={14} style={{ flexShrink: 0 }} />
-              <select
-                value={sourceFilter}
-                onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
-                style={{
-                  background: 'var(--bg-card, #fff)',
-                  border: '1.5px solid var(--border, #e2e8f0)',
-                  borderRadius: t.radius.sm,
-                  padding: '5px 10px', fontSize: 13,
-                  color: 'var(--text, #374151)',
-                  cursor: 'pointer', outline: 'none',
-                  fontWeight: 500,
-                }}
-              >
+            <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, color:C.textMid }}>
+              <Filter size={13}/>
+              <select value={sourceFilter} onChange={e=>{setSourceFilter(e.target.value);setPage(1);}}
+                style={{ ...inputBase, width:'auto', padding:'5px 9px', fontSize:13, cursor:'pointer', appearance:'none' }}>
                 <option value="All">All sources</option>
-                {Object.keys(sourcePalette).map(s => <option key={s} value={s}>{s}</option>)}
+                {Object.keys(SOURCE_PALETTE).map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
           </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'var(--bg-card, #fff)',
-            border: '1.5px solid var(--border, #e2e8f0)',
-            borderRadius: t.radius.md,
-            padding: '7px 12px',
-          }}>
-            <Search size={14} style={{ color: 'var(--text-muted, #94a3b8)', flexShrink: 0 }} />
-            <input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search name, phone, property, company..."
-              style={{
-                background: 'none', border: 'none', outline: 'none',
-                fontSize: 13.5, color: 'var(--text, #374151)',
-                width: 220,
-              }}
-            />
+          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 13px',
+            background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:C.r.md }}>
+            <Search size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
+            <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}
+              placeholder="Search name, phone, property…"
+              style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:210 }}/>
+            {search && (
+              <button onClick={()=>{setSearch('');setPage(1);}} style={{ background:'none', border:'none',
+                color:C.textMuted, cursor:'pointer', padding:0, display:'flex' }}>
+                <X size={12}/>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
-              <tr style={{ background: 'var(--bg-muted, #f8fafc)' }}>
-                {['Client', 'Phone', 'Property', 'Source', 'Type', 'Added', 'Actions'].map((h, i) => (
-                  <th key={h} style={{
-                    textAlign: i === 6 ? 'center' : 'left',
-                    padding: '11px 16px',
-                    fontSize: 11.5, fontWeight: 700,
-                    color: 'var(--text-muted, #64748b)',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    borderBottom: '1.5px solid var(--border, #e2e8f0)',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {h}
+              <tr style={{ background:C.surfaceRaised }}>
+                {[
+                  {label:'Client',  align:'left'},
+                  {label:'Phone',   align:'left'},
+                  {label:'Property',align:'left'},
+                  {label:'Source',  align:'left'},
+                  {label:'Type',    align:'left'},
+                  {label:'Added',   align:'left'},
+                  {label:'Actions', align:'center'},
+                ].map(h => (
+                  <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
+                    fontSize:10.5, fontWeight:700, color:C.textMuted,
+                    textTransform:'uppercase', letterSpacing:'.07em',
+                    borderBottom:`1.5px solid ${C.border}`, whiteSpace:'nowrap' }}>
+                    {h.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {pageItems.length === 0 ? (
+              {pageItems.length===0 ? (
                 <tr>
-                  <td colSpan={7} style={{
-                    padding: '56px 20px',
-                    textAlign: 'center',
-                    color: 'var(--text-muted, #94a3b8)',
-                  }}>
-                    <Users size={32} style={{ opacity: 0.3, marginBottom: 10, display: 'block', margin: '0 auto 10px' }} />
-                    <p style={{ fontSize: 14, fontWeight: 500, margin: '0 0 6px' }}>No clients waiting for a call</p>
-                    <p style={{ fontSize: 13, margin: 0, opacity: 0.7 }}>
-                      {allClients.length === 0
-                        ? 'Click "Add New Client" or import a list to get started.'
-                        : 'Every client has already been called, or try a different search/filter.'}
-                    </p>
+                  <td colSpan={7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
+                    <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
+                      display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+                      <Users size={24} style={{ opacity:.4 }}/>
+                    </div>
+                    <div style={{ fontSize:14.5, fontWeight:700, color:C.textMid, marginBottom:6 }}>
+                      No clients in the queue
+                    </div>
+                    <div style={{ fontSize:13, opacity:.7 }}>
+                      {allClients.length===0
+                        ? 'Add a client or import a list to get started.'
+                        : 'All clients have been called, or adjust your search.'}
+                    </div>
                   </td>
                 </tr>
-              ) : pageItems.map((item, i) => (
-                <tr
-                  key={item.id}
-                  onMouseEnter={() => setHoveredRow(item.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  style={{
-                    background: hoveredRow === item.id
-                      ? 'var(--primary-soft, rgba(59,130,246,0.04))'
-                      : i % 2 !== 0 ? 'var(--bg-muted, #f8fafc)' : 'transparent',
-                    transition: 'background 0.1s',
-                  }}
-                >
-                  {/* Client (avatar + name + id) */}
-                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #f1f5f9)', maxWidth: 240 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Avatar name={item.name} size={30} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 13.5, fontWeight: 600, color: 'var(--text, #1e293b)',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {item.name}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>
-                          {item.company || `#${item.id}`}
+              ) : pageItems.map((item,i) => {
+                const srcColor = SOURCE_ACCENT[item.source]||C.textMuted;
+                const hovered  = hoveredRow===item.id;
+                return (
+                  <tr key={item.id}
+                    onMouseEnter={()=>setHoveredRow(item.id)}
+                    onMouseLeave={()=>setHoveredRow(null)}
+                    style={{
+                      background:hovered ? '#FFFDF5' : i%2?C.surfaceRaised:'transparent',
+                      transition:'background .1s', position:'relative',
+                    }}>
+                    {/* Signature left-edge urgency bar */}
+                    <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`,
+                      maxWidth:240, paddingLeft:0 }}>
+                      <div style={{ display:'flex', alignItems:'center' }}>
+                        {/* The left-edge colour strip */}
+                        <div style={{ width:3, height:44, flexShrink:0, borderRadius:2,
+                          background:srcColor, marginRight:13, opacity:.85 }}/>
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <Avatar name={item.name} size={32}/>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13.5, fontWeight:600, color:C.text,
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                              {item.name}
+                            </div>
+                            <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>
+                              {item.company||`#${item.id}`}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  {/* Phone */}
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)', whiteSpace: 'nowrap' }}>
-                    {item.phone}
-                  </td>
-                  {/* Property */}
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    {item.propertyType || <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>}
-                  </td>
-                  {/* Source */}
-                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    {item.source ? <SourceBadge source={item.source} /> : <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>}
-                  </td>
-                  {/* Type */}
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text, #374151)', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    {item.type || '—'}
-                  </td>
-                  {/* Added */}
-                  <td style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--text-muted, #64748b)', borderBottom: '1px solid var(--border, #f1f5f9)', whiteSpace: 'nowrap' }}>
-                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
-                  </td>
-                  {/* Actions */}
-                  <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                      <button
-                        onClick={() => openTakeCall(item)}
-                        title="Take this call"
-                        style={iconBtnStyle('linear-gradient(135deg, #1e40af, #3b82f6)', '#fff', 'rgba(59,130,246,0.4)')}
-                        {...iconBtnHover}
-                      >
-                        <Phone size={14} />
-                      </button>
-                      <button
-                        onClick={() => setEditingClient(item)}
-                        title="Edit client"
-                        style={iconBtnStyle('#f1f5f9', '#475569')}
-                        {...iconBtnHover}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(item)}
-                        title="Delete client"
-                        style={iconBtnStyle('#fef2f2', '#ef4444')}
-                        {...iconBtnHover}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                      borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                      {item.phone||<span style={{ color:C.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                      borderBottom:`1px solid ${C.border}99` }}>
+                      {item.propertyType||<span style={{ color:C.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                      {item.source ? <SourceTag source={item.source}/> : <span style={{ color:C.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                      borderBottom:`1px solid ${C.border}99` }}>
+                      {item.type||'—'}
+                    </td>
+                    <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
+                      borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
+                    </td>
+                    <td style={{ padding:'11px 16px', textAlign:'center',
+                      borderBottom:`1px solid ${C.border}99` }}>
+                      <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
+                        <IconAction icon={Phone}  onClick={()=>openTakeCall(item)} title="Take call"   variant="primary"/>
+                        <IconAction icon={Pencil} onClick={()=>setEditTarget(item)} title="Edit"        variant="default"/>
+                        <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"   variant="danger"/>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: 12,
-          padding: '12px 18px',
-          borderTop: '1px solid var(--border, #e2e8f0)',
-          background: 'var(--bg-muted, #f8fafc)',
-        }}>
-          <span style={{ fontSize: 12.5, color: 'var(--text-muted, #64748b)' }}>
-            Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1} to{' '}
-            {Math.min(page * pageSize, filtered.length)} of {filtered.length} entries
-            {filtered.length !== queue.length ? ` (filtered from ${queue.length})` : ''}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+          flexWrap:'wrap', gap:12, padding:'11px 18px',
+          borderTop:`1px solid ${C.border}`, background:C.surfaceRaised }}>
+          <span style={{ fontSize:12.5, color:C.textMuted }}>
+            Showing {filtered.length===0?0:(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {filtered.length}
+            {filtered.length!==queue.length ? ` (filtered from ${queue.length})` : ''}
           </span>
-
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <PageBtn disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
-              <ChevronLeft size={13} /> Previous
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <PageBtn disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
+              <ChevronLeft size={12}/> Prev
             </PageBtn>
-
-            {pageNums.map((p, idx) =>
-              p === '...' ? (
-                <span key={`d${idx}`} style={{ color: 'var(--text-muted)', fontSize: 12, padding: '0 2px' }}>…</span>
-              ) : (
-                <PageBtn key={p} active={p === page} onClick={() => setPage(p)}>
-                  {p}
-                </PageBtn>
-              )
+            {pageNums.map((p,i) =>
+              p==='…'
+                ? <span key={`d${i}`} style={{ padding:'0 4px', color:C.textMuted, fontSize:12 }}>…</span>
+                : <PageBtn key={p} active={p===page} onClick={()=>setPage(p)}>{p}</PageBtn>
             )}
-
-            <PageBtn disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
-              Next <ChevronRight size={13} />
+            <PageBtn disabled={page===totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>
+              Next <ChevronRight size={12}/>
             </PageBtn>
           </div>
         </div>
@@ -1559,39 +1166,10 @@ const NewCall = ({ db, setDb, logAction, user }) => {
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {showAddModal && (
-          <ClientFormModal
-            key="add-modal"
-            onClose={() => setShowAddModal(false)}
-            onSave={handleAddClient}
-          />
-        )}
-        {editingClient && (
-          <ClientFormModal
-            key="edit-modal"
-            client={editingClient}
-            onClose={() => setEditingClient(null)}
-            onSave={handleEditClient}
-          />
-        )}
-        {deleteTarget && (
-          <DeleteConfirmModal
-            key="delete-modal"
-            client={deleteTarget}
-            onCancel={() => setDeleteTarget(null)}
-            onConfirm={confirmDelete}
-          />
-        )}
-        {activeLead && (
-          <TakeCallModal
-            key="take-call-modal"
-            lead={activeLead}
-            onChange={updateActiveLead}
-            onClose={closeTakeCall}
-            onSubmit={submitTakeCall}
-            user={user}
-          />
-        )}
+        {showAdd      && <ClientFormModal key="add"  onClose={()=>setShowAdd(false)}  onSave={addClient}/>}
+        {editTarget   && <ClientFormModal key="edit" client={editTarget} onClose={()=>setEditTarget(null)} onSave={editClient}/>}
+        {deleteTarget && <DeleteConfirmModal key="del" client={deleteTarget} onCancel={()=>setDeleteTarget(null)} onConfirm={confirmDelete}/>}
+        {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} user={user}/>}
       </AnimatePresence>
     </motion.div>
   );

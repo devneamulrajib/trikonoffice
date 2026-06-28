@@ -33,15 +33,14 @@ const adminOnly = (req, res, next) => {
 };
 
 async function main() {
-  const db = await mysql.createPool({
+  const pool = await mysql.createPool({
     host:     process.env.DB_HOST,
     user:     process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
   });
 
-  // ── users table ─────────────────────────────────────────────────────────
-  await db.execute(`
+  await pool.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id          INT AUTO_INCREMENT PRIMARY KEY,
       name        VARCHAR(100)  NOT NULL,
@@ -53,16 +52,14 @@ async function main() {
     )
   `);
 
-  // Add permissions column if it doesn't exist yet (idempotent)
   try {
-    await db.execute(`ALTER TABLE users ADD COLUMN permissions JSON DEFAULT NULL`);
-    console.log('Added permissions column ✅');
+    await pool.execute(`ALTER TABLE users ADD COLUMN permissions JSON DEFAULT NULL`);
+    console.log('Added permissions column');
   } catch (err) {
-    if (err.code !== 'ER_DUP_FIELDNAME') console.error('Alter table error:', err);
+    if (err.code !== 'ER_DUP_FIELDNAME') console.error('Alter error:', err);
   }
 
-  // ── app_data table — single-row shared db blob ───────────────────────────
-  await db.execute(`
+  await pool.execute(`
     CREATE TABLE IF NOT EXISTS app_data (
       id         INT PRIMARY KEY DEFAULT 1,
       payload    MEDIUMTEXT NOT NULL,
@@ -70,16 +67,18 @@ async function main() {
     )
   `);
 
-  console.log('DB connected ✅');
+  console.log('DB ready');
 
-  // ── LOGIN ────────────────────────────────────────────────────────────────
+  app.get('/api/ping', (req, res) => {
+    res.json({ ok: true, ts: Date.now() });
+  });
+
   app.post('/api/auth/login', async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email || !password)
         return res.status(400).json({ message: 'Email and password required' });
 
-      // Superadmin via env (no DB row needed)
       if (
         email    === process.env.SUPER_ADMIN_EMAIL &&
         password === process.env.SUPER_ADMIN_PASSWORD
@@ -95,20 +94,18 @@ async function main() {
         });
       }
 
-      const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+      const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
       if (!rows.length) return res.status(401).json({ message: 'Invalid credentials' });
 
       const match = await bcrypt.compare(password, rows[0].password);
       if (!match) return res.status(401).json({ message: 'Invalid credentials' });
 
       const u = rows[0];
-
       let permissions = [];
       if (u.permissions) {
         try {
           permissions = typeof u.permissions === 'string'
-            ? JSON.parse(u.permissions)
-            : u.permissions;
+            ? JSON.parse(u.permissions) : u.permissions;
         } catch { permissions = []; }
       }
 
@@ -118,17 +115,13 @@ async function main() {
         { expiresIn: '7d' }
       );
 
-      res.json({
-        token,
-        user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions }
-      });
+      res.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions } });
     } catch (err) {
       console.error('Login error:', err);
       res.status(500).json({ message: 'Server error' });
     }
   });
 
-  // ── CREATE USER ──────────────────────────────────────────────────────────
   app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
       const { name, email, password, permissions = [] } = req.body;
@@ -136,7 +129,7 @@ async function main() {
         return res.status(400).json({ message: 'All fields required' });
 
       const hashed = await bcrypt.hash(password, 10);
-      await db.execute(
+      await pool.execute(
         'INSERT INTO users (name, email, password, role, permissions) VALUES (?, ?, ?, ?, ?)',
         [name, email, hashed, 'user', JSON.stringify(permissions)]
       );
@@ -149,10 +142,9 @@ async function main() {
     }
   });
 
-  // ── GET ALL USERS ────────────────────────────────────────────────────────
   app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
-      const [rows] = await db.execute(
+      const [rows] = await pool.execute(
         'SELECT id, name, email, role, permissions, created_at FROM users'
       );
       const users = rows.map(u => ({
@@ -161,8 +153,7 @@ async function main() {
           if (!u.permissions) return [];
           try {
             return typeof u.permissions === 'string'
-              ? JSON.parse(u.permissions)
-              : u.permissions;
+              ? JSON.parse(u.permissions) : u.permissions;
           } catch { return []; }
         })()
       }));
@@ -173,11 +164,10 @@ async function main() {
     }
   });
 
-  // ── UPDATE USER PERMISSIONS ──────────────────────────────────────────────
   app.patch('/api/users/:id/permissions', authMiddleware, adminOnly, async (req, res) => {
     try {
       const { permissions = [] } = req.body;
-      await db.execute(
+      await pool.execute(
         'UPDATE users SET permissions = ? WHERE id = ?',
         [JSON.stringify(permissions), req.params.id]
       );
@@ -188,10 +178,9 @@ async function main() {
     }
   });
 
-  // ── DELETE USER ──────────────────────────────────────────────────────────
   app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
     try {
-      await db.execute('DELETE FROM users WHERE id = ?', [req.params.id]);
+      await pool.execute('DELETE FROM users WHERE id = ?', [req.params.id]);
       res.json({ message: 'Deleted' });
     } catch (err) {
       console.error('Delete user error:', err);
@@ -199,10 +188,9 @@ async function main() {
     }
   });
 
-  // ── GET /api/data — load shared db ──────────────────────────────────────
   app.get('/api/data', authMiddleware, async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT payload FROM app_data WHERE id = 1');
+      const [rows] = await pool.execute('SELECT payload FROM app_data WHERE id = 1');
       if (!rows.length) return res.json({});
       res.json(JSON.parse(rows[0].payload));
     } catch (err) {
@@ -211,15 +199,13 @@ async function main() {
     }
   });
 
-  // ── PUT /api/data — save shared db ──────────────────────────────────────
   app.put('/api/data', authMiddleware, async (req, res) => {
     try {
       const payload = JSON.stringify(req.body);
-      await db.execute(`
-        INSERT INTO app_data (id, payload)
-        VALUES (1, ?)
-        ON DUPLICATE KEY UPDATE payload = VALUES(payload)
-      `, [payload]);
+      await pool.execute(
+        'INSERT INTO app_data (id, payload) VALUES (1, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)',
+        [payload]
+      );
       res.json({ message: 'Saved' });
     } catch (err) {
       console.error('PUT /api/data error:', err);
@@ -227,16 +213,15 @@ async function main() {
     }
   });
 
-  // ── SPA fallback — must be last ──────────────────────────────────────────
   app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
 
   const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => console.log(`Running on port ${PORT} 🚀`));
+  app.listen(PORT, () => console.log(`Running on port ${PORT}`));
 }
 
-main().catch((err) => {
-  console.error('Failed to start server:', err);
+main().catch(err => {
+  console.error('Startup error:', err);
   process.exit(1);
 });

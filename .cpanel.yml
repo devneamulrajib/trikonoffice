@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/agruokni/trikonoffice
+    - cd $DEPLOYPATH
+    - source /home/agruokni/nodevenv/trikonoffice/20/bin/activate
+    - npm install --production=false
+    - npm run build

@@ -35,7 +35,7 @@ import ClientsHub      from './pages/clients/ClientsHub';
 import ManageClients   from './pages/clients/ManageClients';
 import ImportClients   from './pages/clients/ImportClients';
 
-// ─── DEFAULT DB (mirrors DEFAULT_APP_DATA in server.js) ───────────────────────
+// ─── DEFAULT DB ───────────────────────────────────────────────────────────────
 const DEFAULT_DB = {
   categories: [
     { id: 1, name: 'Operations', subs: ['Rent', 'Utilities'] },
@@ -56,7 +56,7 @@ const DEFAULT_DB = {
   clients:          [],
 };
 
-// ─── VIEWS THAT ARE ALWAYS SUPERADMIN-ONLY (never assignable) ─────────────────
+// ─── SUPERADMIN-ONLY VIEWS ────────────────────────────────────────────────────
 const SUPERADMIN_ONLY_VIEWS = new Set([
   'approvals',
   'budget_request',
@@ -66,10 +66,7 @@ const SUPERADMIN_ONLY_VIEWS = new Set([
   'manage_users',
 ]);
 
-// ─── MAP: view id → permission key required for regular users ─────────────────
-// If a view id is in this map, a regular user needs that permKey in their
-// permissions array to access it. Views NOT in this map (and not superadmin-only)
-// are always accessible (e.g. dashboard).
+// ─── VIEW → PERMISSION MAP ────────────────────────────────────────────────────
 const VIEW_PERM_MAP = {
   add_expense:      'add_expense',
   budget_history:   'budget_history',
@@ -87,27 +84,36 @@ const VIEW_PERM_MAP = {
   clients_import:   'clients_import',
 };
 
-// ─── DATA SYNC CONFIG ──────────────────────────────────────────────────────────
-const LOCAL_CACHE_KEY = 'clear_db_v6';
-const SYNC_DEBOUNCE_MS = 600; // batch rapid-fire updates into one PUT request
+// ─── DATA SYNC CONFIG ─────────────────────────────────────────────────────────
+const LOCAL_CACHE_KEY  = 'clear_db_v6';
+const SYNC_DEBOUNCE_MS = 600;
 
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
 const Forbidden = ({ onBack }) => (
   <div style={{
-    display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center',
-    minHeight: '60vh', gap: 16, textAlign: 'center'
+    display:        'flex',
+    flexDirection:  'column',
+    alignItems:     'center',
+    justifyContent: 'center',
+    minHeight:      '60vh',
+    gap:            16,
+    textAlign:      'center',
   }}>
     <div style={{ fontSize: 48 }}>🔒</div>
-    <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A' }}>Access Restricted</h2>
-    <p style={{ color: '#94A3B8', fontSize: 14 }}>You don't have permission to view this page.</p>
+    <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111111' }}>Access Restricted</h2>
+    <p style={{ color: '#9CA3AF', fontSize: 14 }}>You don't have permission to view this page.</p>
     <button
       onClick={onBack}
       style={{
-        marginTop: 8, padding: '10px 24px',
-        background: 'var(--primary)', color: '#FFF',
-        border: 'none', borderRadius: 10,
-        fontWeight: 600, fontSize: 14, cursor: 'pointer'
+        marginTop:    8,
+        padding:      '10px 24px',
+        background:   '#F9A825',
+        color:        '#111111',
+        border:       'none',
+        borderRadius: 10,
+        fontWeight:   700,
+        fontSize:     14,
+        cursor:       'pointer',
       }}
     >
       Go to Dashboard
@@ -115,15 +121,38 @@ const Forbidden = ({ onBack }) => (
   </div>
 );
 
+// ─── LOADING SCREEN ───────────────────────────────────────────────────────────
+const LoadingScreen = () => (
+  <div style={{
+    minHeight:      '100vh',
+    display:        'flex',
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexDirection:  'column',
+    gap:            14,
+    background:     '#F9FAFB',
+  }}>
+    <GlobalStyles />
+    <div style={{
+      width:           36,
+      height:          36,
+      borderRadius:    '50%',
+      border:          '3px solid #F3F4F6',
+      borderTopColor:  '#F9A825',
+      animation:       'spin 0.8s linear infinite',
+    }} />
+    <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
+    <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading your workspace…</p>
+  </div>
+);
+
 // ─── SYNC STATUS PILL ─────────────────────────────────────────────────────────
-// Small, unobtrusive indicator so users understand whether their data is
-// shared/saved or only cached locally (e.g. if the network drops out).
 const SyncStatus = ({ status }) => {
-  if (status === 'synced') return null; // don't clutter the UI when everything's fine
+  if (status === 'synced') return null;
 
   const config = {
     loading: { bg: '#EEF2FF', color: '#6366F1', text: 'Loading shared data…' },
-    saving:  { bg: '#FEF3C7', color: '#B45309', text: 'Saving…' },
+    saving:  { bg: '#FFFBEB', color: '#B45309', text: 'Saving…' },
     error:   { bg: '#FEE2E2', color: '#DC2626', text: 'Offline — changes saved locally only' },
   }[status];
 
@@ -131,16 +160,27 @@ const SyncStatus = ({ status }) => {
 
   return (
     <div style={{
-      position: 'fixed', bottom: 18, right: 18, zIndex: 999,
-      background: config.bg, color: config.color,
-      padding: '8px 16px', borderRadius: 999,
-      fontSize: 12.5, fontWeight: 600,
-      boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-      display: 'flex', alignItems: 'center', gap: 8,
+      position:   'fixed',
+      bottom:     18,
+      right:      18,
+      zIndex:     999,
+      background: config.bg,
+      color:      config.color,
+      padding:    '8px 16px',
+      borderRadius: 999,
+      fontSize:   12.5,
+      fontWeight: 600,
+      boxShadow:  '0 2px 10px rgba(0,0,0,0.08)',
+      display:    'flex',
+      alignItems: 'center',
+      gap:        8,
     }}>
       <span style={{
-        width: 7, height: 7, borderRadius: '50%',
-        background: config.color, flexShrink: 0,
+        width:      7,
+        height:     7,
+        borderRadius: '50%',
+        background: config.color,
+        flexShrink: 0,
       }} />
       {config.text}
     </div>
@@ -149,25 +189,20 @@ const SyncStatus = ({ status }) => {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 const ClearSuite = () => {
-  const [view,   setView]   = useState('dashboard');
-  const [isAuth, setIsAuth] = useState(false);
-  const [user,   setUser]   = useState(null);
-  const [month,  setMonth]  = useState(new Date().toISOString().slice(0, 7));
+  const [view,       setView]      = useState('dashboard');
+  const [isAuth,     setIsAuth]    = useState(false);
+  const [user,       setUser]      = useState(null);
+  const [month,      setMonth]     = useState(new Date().toISOString().slice(0, 7));
+  const [syncStatus, setSyncStatus]= useState('loading');
+  const [dbLoaded,   setDbLoaded]  = useState(false);
+  const [db,         setDbState]   = useState(DEFAULT_DB);
 
-  // 'loading' | 'synced' | 'saving' | 'error'
-  const [syncStatus, setSyncStatus] = useState('loading');
-  const [dbLoaded, setDbLoaded] = useState(false);
-
-  const [db, setDbState] = useState(DEFAULT_DB);
-
-  // Keep track of the latest db so the debounced sync always sends the
-  // freshest value even if several setDb calls happen in quick succession.
-  const dbRef = useRef(db);
-  dbRef.current = db;
+  const dbRef        = useRef(db);
+  dbRef.current      = db;
   const syncTimerRef = useRef(null);
-  const tokenRef = useRef(null);
+  const tokenRef     = useRef(null);
 
-  // ── Authenticated fetch helper ───────────────────────────────────────────
+  // ── Authenticated fetch ──────────────────────────────────────────────────
   const authedFetch = useCallback((url, options = {}) => {
     const token = tokenRef.current || localStorage.getItem('token');
     return fetch(url, {
@@ -180,7 +215,7 @@ const ClearSuite = () => {
     });
   }, []);
 
-  // ── Push the current db to the server (debounced) ───────────────────────
+  // ── Debounced server sync ────────────────────────────────────────────────
   const syncToServer = useCallback(() => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
@@ -188,7 +223,7 @@ const ClearSuite = () => {
         setSyncStatus('saving');
         const res = await authedFetch('/api/data', {
           method: 'PUT',
-          body: JSON.stringify(dbRef.current),
+          body:   JSON.stringify(dbRef.current),
         });
         if (!res.ok) throw new Error('Save failed');
         setSyncStatus('synced');
@@ -199,11 +234,7 @@ const ClearSuite = () => {
     }, SYNC_DEBOUNCE_MS);
   }, [authedFetch]);
 
-  // ── setDb: same call signature everywhere (object or updater fn) ────────
-  // Pages across the app already call setDb(prev => ({...})) or setDb(obj).
-  // This wrapper keeps that exact API so no other page needs to change,
-  // while also caching to localStorage (offline fallback) and syncing the
-  // full db to the server so every logged-in user shares the same data.
+  // ── setDb wrapper ────────────────────────────────────────────────────────
   const setDb = useCallback((update) => {
     setDbState(prev => {
       const next = typeof update === 'function' ? update(prev) : update;
@@ -214,12 +245,10 @@ const ClearSuite = () => {
       }
       return next;
     });
-    // Fire the sync after state update is scheduled; dbRef will catch up
-    // on next render, and the debounce window covers the gap.
     syncToServer();
   }, [syncToServer]);
 
-  // ── Restore session + load shared data on app start ─────────────────────
+  // ── Restore session on mount ─────────────────────────────────────────────
   useEffect(() => {
     const s = localStorage.getItem('clear_session_v6');
     const t = localStorage.getItem('token');
@@ -230,17 +259,14 @@ const ClearSuite = () => {
     }
   }, []);
 
-  // ── Once authenticated, load the shared db from the server ──────────────
+  // ── Load shared db once authenticated ───────────────────────────────────
   useEffect(() => {
     if (!isAuth) return;
-
     let cancelled = false;
 
     const loadData = async () => {
       setSyncStatus('loading');
 
-      // Show cached local data immediately while the network request runs,
-      // so the UI doesn't flash empty on every load.
       const cached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (cached) {
         try {
@@ -271,16 +297,17 @@ const ClearSuite = () => {
     return () => { cancelled = true; };
   }, [isAuth, authedFetch]);
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
   const logAction = (action, type, target) => {
     const entry = {
       id:        Date.now(),
       user:      user?.name || user?.firstName || 'User',
       action, type, target,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
     setDb(prev => ({
       ...prev,
-      activityLog: [entry, ...(prev.activityLog || [])].slice(0, 100)
+      activityLog: [entry, ...(prev.activityLog || [])].slice(0, 100),
     }));
   };
 
@@ -303,32 +330,22 @@ const ClearSuite = () => {
     setView('dashboard');
   };
 
-  // ── Permission check for a given view ───────────────────────────────────
+  // ── Permission helpers ───────────────────────────────────────────────────
   const userCan = (v) => {
     if (!user) return false;
     if (user.role === 'superadmin') return true;
-
-    // Superadmin-only views are blocked
     if (SUPERADMIN_ONLY_VIEWS.has(v)) return false;
-
-    // Dashboard is always visible
     if (v === 'dashboard') return true;
-
-    // Check permission map
     const requiredPerm = VIEW_PERM_MAP[v];
-    if (!requiredPerm) return true; // no perm required → visible
+    if (!requiredPerm) return true;
     return (user.permissions ?? []).includes(requiredPerm);
   };
 
-  // ── Safe setView: redirect to dashboard if user lacks permission ─────────
   const safeSetView = (v) => {
-    if (!userCan(v)) {
-      setView('dashboard');
-      return;
-    }
-    setView(v);
+    setView(userCan(v) ? v : 'dashboard');
   };
 
+  // ── Derived data ─────────────────────────────────────────────────────────
   const approvedBudget = useMemo(() =>
     db.budgetRequests
       .filter(b => b.month === month && b.status === 'approved')
@@ -344,7 +361,7 @@ const ClearSuite = () => {
   );
 
   const chartData = db.categories.map(cat => ({
-    name: cat.name,
+    name:   cat.name,
     budget: db.budgetRequests
       .filter(b => b.month === month && b.status === 'approved')
       .reduce((s, b) => {
@@ -353,46 +370,30 @@ const ClearSuite = () => {
       }, 0),
     spent: db.expenses
       .filter(e => e.categoryId === cat.id && e.date.startsWith(month))
-      .reduce((s, e) => s + e.amount, 0)
+      .reduce((s, e) => s + e.amount, 0),
   }));
 
   const pendingCount = db.budgetRequests.filter(r => r.status === 'pending').length;
 
+  // ── Render guards ────────────────────────────────────────────────────────
   if (!isAuth) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // ── Wait for the first shared-data load before rendering pages ──────────
-  // Prevents a flash of an empty dashboard before the shared data arrives.
   if (!dbLoaded) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: 14,
-      }}>
-        <GlobalStyles />
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          border: '3px solid var(--border, #e2e8f0)',
-          borderTopColor: 'var(--primary, #6366F1)',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
-        <p style={{ color: 'var(--text-muted, #94A3B8)', fontSize: 13 }}>Loading your workspace…</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
-  const isSuperAdmin = user?.role === 'superadmin';
-
-  // ── Is the current view forbidden for this user? ─────────────────────────
-  const isViewForbidden = !userCan(view);
-
-  const ccProps = { db, setDb, logAction, user };
+  const isSuperAdmin     = user?.role === 'superadmin';
+  const isViewForbidden  = !userCan(view);
+  const ccProps          = { db, setDb, logAction, user };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex' }}>
+    <div style={{
+      minHeight:  '100vh',
+      display:    'flex',
+      background: '#F9FAFB',
+    }}>
       <GlobalStyles />
 
       <Sidebar
@@ -405,10 +406,17 @@ const ClearSuite = () => {
         pendingCount={pendingCount}
       />
 
-      <main style={{ marginLeft: 260, flex: 1, padding: '40px 48px', minWidth: 0 }}>
+      <main style={{
+        marginLeft: 260,
+        flex:       1,
+        padding:    '44px 52px',
+        minWidth:   0,
+        background: '#F9FAFB',
+        minHeight:  '100vh',
+      }}>
         <AnimatePresence mode="wait">
 
-          {/* ── Forbidden fallback ───────────────────────────────────────── */}
+          {/* ── Forbidden ───────────────────────────────────────────────── */}
           {isViewForbidden && (
             <Forbidden key="forbidden" onBack={() => setView('dashboard')} />
           )}

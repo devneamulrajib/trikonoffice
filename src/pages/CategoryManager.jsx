@@ -1,266 +1,387 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, X, Tag, FolderOpen, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, X, Layers, Hash, Sparkles, ChevronRight } from 'lucide-react';
 import Page from '../components/Page';
 
-const CategoryManager = ({ db, setDb, logAction }) => {
-  const [newCat, setNewCat] = useState('');
-  const [subVals, setSubVals] = useState({});
-  const [focusedCard, setFocusedCard] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+/* ─── palette & accent cycle ─────────────────────────────────────── */
+const ACCENTS = [
+  { glow: '#06b6d4', light: '#cffafe', text: '#0891b2', soft: 'rgba(6,182,212,0.12)'  },
+  { glow: '#a78bfa', light: '#ede9fe', text: '#7c3aed', soft: 'rgba(167,139,250,0.12)' },
+  { glow: '#34d399', light: '#d1fae5', text: '#059669', soft: 'rgba(52,211,153,0.12)'  },
+  { glow: '#f472b6', light: '#fce7f3', text: '#db2777', soft: 'rgba(244,114,182,0.12)' },
+  { glow: '#fbbf24', light: '#fef3c7', text: '#d97706', soft: 'rgba(251,191,36,0.12)'  },
+  { glow: '#60a5fa', light: '#dbeafe', text: '#2563eb', soft: 'rgba(96,165,250,0.12)'  },
+];
 
+const CategoryManager = ({ db, setDb, logAction }) => {
+  const [newCat, setNewCat]     = useState('');
+  const [subVals, setSubVals]   = useState({});
+  const [hoveredCard, setHoveredCard] = useState(null);
+  const [inputFocus, setInputFocus]   = useState(false);
+
+  const totalSubs = db.categories.reduce((a, c) => a + c.subs.length, 0);
+
+  /* ─── handlers (unchanged logic) ─── */
   const handleAddCategory = () => {
     if (!newCat.trim()) return;
-    setDb({
-      ...db,
-      categories: [
-        ...db.categories,
-        { id: Date.now(), name: newCat.trim(), subs: [] }
-      ]
-    });
+    setDb({ ...db, categories: [...db.categories, { id: Date.now(), name: newCat.trim(), subs: [] }] });
     logAction('Created', 'Sector', newCat.trim());
     setNewCat('');
   };
-
   const handleDeleteCategory = (id, name) => {
-    if (window.confirm('Delete sector?')) {
+    if (window.confirm('Delete this sector and all its sub-items?')) {
       setDb({ ...db, categories: db.categories.filter(x => x.id !== id) });
       logAction('Deleted', 'Sector', name);
     }
   };
-
   const handleAddSub = (catId) => {
     const val = subVals[catId];
     if (!val?.trim()) return;
-    setDb({
-      ...db,
-      categories: db.categories.map(c =>
-        c.id === catId ? { ...c, subs: [...c.subs, val.trim()] } : c
-      )
-    });
+    setDb({ ...db, categories: db.categories.map(c => c.id === catId ? { ...c, subs: [...c.subs, val.trim()] } : c) });
     setSubVals({ ...subVals, [catId]: '' });
   };
-
   const handleDeleteSub = (catId, subIndex) => {
-    setDb({
-      ...db,
-      categories: db.categories.map(c =>
-        c.id === catId
-          ? { ...c, subs: c.subs.filter((_, j) => j !== subIndex) }
-          : c
-      )
-    });
+    setDb({ ...db, categories: db.categories.map(c => c.id === catId ? { ...c, subs: c.subs.filter((_, j) => j !== subIndex) } : c) });
   };
-
-  const handleKeyDown = (e, catId) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleAddSub(catId); }
-  };
-
-  const totalSubs = db.categories.reduce((acc, c) => acc + c.subs.length, 0);
 
   return (
     <Page title="Corporate Sectors" subtitle="Structure expenditure categories and items">
+
+      {/* ══════════════ GLOBAL STYLES ══════════════ */}
       <style>{`
-        .cm-hero-bar {
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-          border-radius: 16px;
-          padding: 28px 32px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 24px;
-          margin-bottom: 28px;
-          border: 1px solid rgba(255,255,255,0.06);
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        .cm-root {
+          font-family: 'Inter', system-ui, sans-serif;
+          min-height: 100vh;
+          background: #080c14;
+          padding: 32px;
+          position: relative;
+          overflow: hidden;
         }
+
+        /* ambient background glow */
+        .cm-root::before {
+          content: '';
+          position: fixed;
+          top: -200px; left: -200px;
+          width: 600px; height: 600px;
+          background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .cm-root::after {
+          content: '';
+          position: fixed;
+          bottom: -150px; right: -150px;
+          width: 500px; height: 500px;
+          background: radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 70%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .cm-inner { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; }
+
+        /* ─── TOP HEADER ─── */
+        .cm-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          margin-bottom: 36px;
+          gap: 24px;
+        }
+        .cm-header-left {}
+        .cm-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #6366f1;
+          margin-bottom: 10px;
+        }
+        .cm-eyebrow-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: #6366f1;
+          box-shadow: 0 0 8px #6366f1;
+          animation: cm-pulse 2s infinite;
+        }
+        @keyframes cm-pulse {
+          0%,100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: 0.5; transform: scale(0.8); }
+        }
+        .cm-page-title {
+          font-size: 32px;
+          font-weight: 900;
+          letter-spacing: -0.03em;
+          color: #f8fafc;
+          line-height: 1;
+        }
+        .cm-page-title span {
+          background: linear-gradient(90deg, #6366f1, #06b6d4);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .cm-page-sub {
+          font-size: 13.5px;
+          color: #475569;
+          margin-top: 8px;
+          font-weight: 400;
+        }
+
+        /* ─── STAT CHIPS ─── */
         .cm-stats {
           display: flex;
-          gap: 32px;
+          gap: 12px;
+          align-items: center;
         }
-        .cm-stat {
-          text-align: center;
+        .cm-stat-chip {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          padding: 12px 20px;
+          background: #0f172a;
+          border: 1px solid #1e293b;
+          border-radius: 12px;
         }
         .cm-stat-num {
-          font-size: 28px;
+          font-size: 24px;
           font-weight: 800;
-          color: #fff;
+          color: #f8fafc;
+          letter-spacing: -0.04em;
           line-height: 1;
         }
         .cm-stat-label {
           font-size: 11px;
-          color: rgba(255,255,255,0.45);
+          color: #475569;
+          font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          margin-top: 4px;
+          margin-top: 3px;
         }
-        .cm-stat-divider {
-          width: 1px;
-          background: rgba(255,255,255,0.1);
-          align-self: stretch;
+
+        /* ─── ADD BAR ─── */
+        .cm-add-wrap {
+          margin-bottom: 36px;
         }
         .cm-add-bar {
           display: flex;
-          gap: 12px;
-          background: var(--white, #fff);
-          border: 1.5px solid var(--zinc-200, #e4e4e7);
-          border-radius: 14px;
-          padding: 18px 20px;
           align-items: center;
-          margin-bottom: 28px;
-          transition: border-color 0.2s, box-shadow 0.2s;
+          gap: 0;
+          background: #0f172a;
+          border: 1px solid ${inputFocus ? '#6366f1' : '#1e293b'};
+          border-radius: 14px;
+          padding: 6px 6px 6px 20px;
+          transition: border-color 0.2s;
+          box-shadow: ${inputFocus ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none'};
         }
-        .cm-add-bar:focus-within {
-          border-color: #6366f1;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
-        }
-        .cm-add-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        .cm-add-icon-wrap {
           display: flex;
           align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+          gap: 10px;
+          flex: 1;
+        }
+        .cm-add-prefix {
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #334155;
+          white-space: nowrap;
+        }
+        .cm-add-slash {
+          color: #1e293b;
+          font-size: 20px;
+          font-weight: 200;
+          margin: 0 10px;
+          user-select: none;
         }
         .cm-add-input {
           flex: 1;
+          background: transparent;
           border: none;
           outline: none;
-          font-size: 14px;
+          font-size: 15px;
           font-weight: 500;
-          background: transparent;
-          color: var(--zinc-900, #18181b);
+          color: #f1f5f9;
+          font-family: inherit;
+          caret-color: #6366f1;
         }
-        .cm-add-input::placeholder { color: var(--zinc-400, #a1a1aa); font-weight: 400; }
-        .cm-create-btn {
+        .cm-add-input::placeholder { color: #334155; }
+        .cm-add-btn {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 9px 18px;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          gap: 8px;
+          padding: 11px 22px;
+          background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
           color: #fff;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 700;
+          letter-spacing: 0.02em;
           border: none;
           border-radius: 10px;
           cursor: pointer;
           white-space: nowrap;
-          transition: opacity 0.15s, transform 0.15s;
+          transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+          box-shadow: 0 4px 20px rgba(99,102,241,0.35);
         }
-        .cm-create-btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .cm-create-btn:active { transform: translateY(0); }
+        .cm-add-btn:hover {
+          opacity: 0.9;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 24px rgba(99,102,241,0.5);
+        }
+        .cm-add-btn:active { transform: translateY(0); }
+
+        /* ─── EMPTY STATE ─── */
         .cm-empty {
-          text-align: center;
-          padding: 72px 24px;
-          background: var(--white, #fff);
-          border: 1.5px dashed var(--zinc-200, #e4e4e7);
-          border-radius: 16px;
-        }
-        .cm-empty-icon {
-          width: 56px;
-          height: 56px;
-          border-radius: 16px;
-          background: #f4f4f5;
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-          margin: 0 auto 16px;
+          padding: 80px 24px;
+          border: 1px dashed #1e293b;
+          border-radius: 20px;
+          text-align: center;
         }
+        .cm-empty-ring {
+          width: 72px; height: 72px;
+          border-radius: 50%;
+          border: 2px dashed #1e293b;
+          display: flex; align-items: center; justify-content: center;
+          margin-bottom: 20px;
+          position: relative;
+        }
+        .cm-empty-title { font-size: 16px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+        .cm-empty-sub   { font-size: 13px; color: #334155; }
+
+        /* ─── GRID ─── */
         .cm-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-          gap: 20px;
+          grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+          gap: 16px;
         }
+
+        /* ─── CARD ─── */
         .cm-card {
-          background: var(--white, #fff);
-          border: 1.5px solid var(--zinc-100, #f4f4f5);
+          background: #0c1220;
+          border: 1px solid #1a2540;
           border-radius: 16px;
           overflow: hidden;
-          transition: border-color 0.2s, box-shadow 0.2s;
+          position: relative;
+          transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+          cursor: default;
         }
         .cm-card:hover {
-          border-color: var(--zinc-200, #e4e4e7);
-          box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+          transform: translateY(-2px);
         }
-        .cm-card-header {
-          padding: 20px 20px 16px;
+        .cm-card-accent-bar {
+          position: absolute;
+          left: 0; top: 0; bottom: 0;
+          width: 3px;
+          border-radius: 3px 0 0 3px;
+          transition: opacity 0.25s;
+        }
+
+        .cm-card-head {
+          padding: 20px 20px 16px 24px;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
-          gap: 12px;
-          border-bottom: 1px solid #f4f4f5;
+          gap: 14px;
         }
-        .cm-card-icon {
-          width: 40px;
-          height: 40px;
+        .cm-card-icon-wrap {
+          width: 42px; height: 42px;
           border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
-          font-size: 18px;
+          position: relative;
+          overflow: hidden;
         }
-        .cm-card-title {
+        .cm-card-icon-wrap::before {
+          content: '';
+          position: absolute; inset: 0;
+          opacity: 0.15;
+        }
+        .cm-title-block { flex: 1; min-width: 0; }
+        .cm-card-name {
           font-size: 15px;
           font-weight: 700;
-          color: var(--zinc-900, #18181b);
+          color: #f1f5f9;
+          letter-spacing: -0.01em;
           line-height: 1.3;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
-        .cm-card-meta {
-          display: flex;
+        .cm-card-count {
+          display: inline-flex;
           align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          color: var(--zinc-400, #a1a1aa);
-          margin-top: 3px;
+          gap: 5px;
+          font-size: 11.5px;
           font-weight: 500;
+          color: #475569;
+          margin-top: 4px;
         }
         .cm-del-btn {
-          width: 32px;
-          height: 32px;
+          width: 30px; height: 30px;
+          display: flex; align-items: center; justify-content: center;
+          background: transparent;
+          border: 1px solid #1e293b;
           border-radius: 8px;
-          border: 1.5px solid #fee2e2;
-          background: #fff5f5;
-          color: #ef4444;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          color: #475569;
           cursor: pointer;
           flex-shrink: 0;
-          transition: background 0.15s, border-color 0.15s;
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
-        .cm-del-btn:hover { background: #fee2e2; border-color: #fca5a5; }
-        .cm-subs-area {
-          padding: 16px 20px;
+        .cm-del-btn:hover {
+          background: rgba(239,68,68,0.1);
+          border-color: rgba(239,68,68,0.3);
+          color: #ef4444;
         }
-        .cm-subs-wrap {
+
+        .cm-divider {
+          height: 1px;
+          background: #111827;
+          margin: 0 20px;
+        }
+
+        /* ─── TAGS AREA ─── */
+        .cm-body { padding: 16px 20px 18px 24px; }
+        .cm-tags-wrap {
           display: flex;
           flex-wrap: wrap;
           gap: 7px;
           margin-bottom: 14px;
         }
-        .cm-sub-tag {
+        .cm-tag {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 7px;
           padding: 5px 10px 5px 12px;
-          background: #f8faff;
-          border: 1px solid #e0e7ff;
           border-radius: 20px;
-          font-size: 12.5px;
-          font-weight: 500;
-          color: #4338ca;
-          transition: background 0.15s;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+          border: 1px solid;
+          transition: opacity 0.15s;
         }
-        .cm-sub-tag:hover { background: #eef2ff; }
-        .cm-sub-x {
-          cursor: pointer;
-          color: #a5b4fc;
+        .cm-tag-x {
           display: flex;
           align-items: center;
-          transition: color 0.15s;
+          cursor: pointer;
+          opacity: 0.5;
+          transition: opacity 0.15s;
+          border: none;
+          background: transparent;
+          padding: 0;
         }
-        .cm-sub-x:hover { color: #6366f1; }
-        .cm-sub-input-row {
+        .cm-tag-x:hover { opacity: 1; }
+
+        /* ─── SUB INPUT ─── */
+        .cm-sub-row {
           display: flex;
           gap: 8px;
         }
@@ -268,174 +389,218 @@ const CategoryManager = ({ db, setDb, logAction }) => {
           flex: 1;
           height: 36px;
           padding: 0 12px;
-          border: 1.5px solid var(--zinc-200, #e4e4e7);
+          background: #080c14;
+          border: 1px solid #1e293b;
           border-radius: 9px;
           font-size: 13px;
-          color: var(--zinc-800, #27272a);
-          background: #fafafa;
+          font-weight: 500;
+          color: #cbd5e1;
+          font-family: inherit;
           outline: none;
-          transition: border-color 0.2s, background 0.2s;
+          transition: border-color 0.2s;
+          caret-color: #6366f1;
         }
-        .cm-sub-input:focus {
-          border-color: #6366f1;
-          background: #fff;
-        }
-        .cm-sub-input::placeholder { color: var(--zinc-400, #a1a1aa); }
-        .cm-add-sub-btn {
+        .cm-sub-input:focus { border-color: #334155; }
+        .cm-sub-input::placeholder { color: #1e293b; }
+        .cm-sub-add {
           height: 36px;
           padding: 0 14px;
-          font-size: 12.5px;
-          font-weight: 600;
-          color: #6366f1;
-          background: #eef2ff;
-          border: 1.5px solid #e0e7ff;
+          background: #111827;
+          border: 1px solid #1e293b;
           border-radius: 9px;
+          font-size: 12.5px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
           cursor: pointer;
           white-space: nowrap;
-          transition: background 0.15s, color 0.15s;
+          font-family: inherit;
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
-        .cm-add-sub-btn:hover { background: #e0e7ff; color: #4338ca; }
-        .cm-card-colors {
-          --c0: linear-gradient(135deg,#dbeafe,#bfdbfe); --t0: #2563eb;
-          --c1: linear-gradient(135deg,#d1fae5,#a7f3d0); --t1: #059669;
-          --c2: linear-gradient(135deg,#fce7f3,#fbcfe8); --t2: #db2777;
-          --c3: linear-gradient(135deg,#fef3c7,#fde68a); --t3: #d97706;
-          --c4: linear-gradient(135deg,#ede9fe,#ddd6fe); --t4: #7c3aed;
-          --c5: linear-gradient(135deg,#ffedd5,#fed7aa); --t5: #ea580c;
+        .cm-sub-add:hover {
+          background: #1e293b;
+          border-color: #334155;
+        }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 680px) {
+          .cm-root { padding: 16px; }
+          .cm-header { flex-direction: column; align-items: flex-start; }
+          .cm-stats { width: 100%; }
+          .cm-stat-chip { flex: 1; align-items: center; }
+          .cm-page-title { font-size: 24px; }
+          .cm-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      {/* HERO STATS BAR */}
-      <div className="cm-hero-bar">
-        <div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Overview</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>Corporate Sectors</div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Manage expenditure categories and sub-items</div>
-        </div>
-        <div className="cm-stats">
-          <div className="cm-stat">
-            <div className="cm-stat-num">{db.categories.length}</div>
-            <div className="cm-stat-label">Sectors</div>
-          </div>
-          <div className="cm-stat-divider" />
-          <div className="cm-stat">
-            <div className="cm-stat-num">{totalSubs}</div>
-            <div className="cm-stat-label">Sub-items</div>
-          </div>
-        </div>
-      </div>
+      <div className="cm-root">
+        <div className="cm-inner">
 
-      {/* ADD NEW SECTOR BAR */}
-      <div className="cm-add-bar">
-        <div className="cm-add-icon">
-          <Plus size={17} color="#fff" strokeWidth={2.5} />
-        </div>
-        <input
-          className="cm-add-input"
-          type="text"
-          placeholder="New sector name (e.g. Technology, Operations, Finance...)"
-          value={newCat}
-          onChange={e => setNewCat(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-        />
-        <button className="cm-create-btn" onClick={handleAddCategory}>
-          <Plus size={14} strokeWidth={2.5} />
-          Create Sector
-        </button>
-      </div>
-
-      {/* EMPTY STATE */}
-      {db.categories.length === 0 && (
-        <div className="cm-empty">
-          <div className="cm-empty-icon">
-            <FolderOpen size={26} color="#a1a1aa" />
+          {/* ── HEADER ── */}
+          <div className="cm-header">
+            <div className="cm-header-left">
+              <div className="cm-eyebrow">
+                <span className="cm-eyebrow-dot" />
+                Expense Structure
+              </div>
+              <div className="cm-page-title">
+                Corporate <span>Sectors</span>
+              </div>
+              <div className="cm-page-sub">
+                Define and organise your expenditure categories and their sub-items.
+              </div>
+            </div>
+            <div className="cm-stats">
+              <div className="cm-stat-chip">
+                <div className="cm-stat-num">{db.categories.length}</div>
+                <div className="cm-stat-label">Sectors</div>
+              </div>
+              <div className="cm-stat-chip">
+                <div className="cm-stat-num">{totalSubs}</div>
+                <div className="cm-stat-label">Sub-items</div>
+              </div>
+            </div>
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--zinc-700, #3f3f46)', marginBottom: 6 }}>
-            No sectors yet
+
+          {/* ── ADD BAR ── */}
+          <div className="cm-add-wrap">
+            <div className="cm-add-bar">
+              <div className="cm-add-icon-wrap">
+                <span className="cm-add-prefix">New Sector</span>
+                <span className="cm-add-slash">/</span>
+                <input
+                  className="cm-add-input"
+                  type="text"
+                  placeholder="e.g. Technology, Operations, Finance..."
+                  value={newCat}
+                  onChange={e => setNewCat(e.target.value)}
+                  onFocus={() => setInputFocus(true)}
+                  onBlur={() => setInputFocus(false)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+                />
+              </div>
+              <button className="cm-add-btn" onClick={handleAddCategory}>
+                <Plus size={15} strokeWidth={2.5} />
+                Create
+              </button>
+            </div>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--zinc-400, #a1a1aa)' }}>
-            Create your first sector above to start organising expenditures.
-          </div>
-        </div>
-      )}
 
-      {/* CARDS GRID */}
-      <div className="cm-grid cm-card-colors">
-        {db.categories.map((cat, idx) => {
-          const ci = idx % 6;
-          const bgVar = `var(--c${ci})`;
-          const colorVar = `var(--t${ci})`;
+          {/* ── EMPTY ── */}
+          {db.categories.length === 0 && (
+            <div className="cm-empty">
+              <div className="cm-empty-ring">
+                <Layers size={28} color="#334155" />
+              </div>
+              <div className="cm-empty-title">No sectors defined yet</div>
+              <div className="cm-empty-sub">Create your first sector above to start organising expenditures.</div>
+            </div>
+          )}
 
-          return (
-            <div key={cat.id} className="cm-card">
+          {/* ── GRID ── */}
+          <div className="cm-grid">
+            {db.categories.map((cat, idx) => {
+              const ac = ACCENTS[idx % ACCENTS.length];
+              const isHov = hoveredCard === cat.id;
 
-              {/* HEADER */}
-              <div className="cm-card-header">
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0 }}>
+              return (
+                <div
+                  key={cat.id}
+                  className="cm-card"
+                  style={{
+                    borderColor: isHov ? ac.glow + '40' : '#1a2540',
+                    boxShadow: isHov ? `0 8px 40px ${ac.glow}20, 0 0 0 1px ${ac.glow}30` : 'none',
+                  }}
+                  onMouseEnter={() => setHoveredCard(cat.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  {/* accent bar */}
                   <div
-                    className="cm-card-icon"
-                    style={{ background: bgVar }}
-                  >
-                    <Tag size={17} color={colorVar} />
+                    className="cm-card-accent-bar"
+                    style={{
+                      background: `linear-gradient(180deg, ${ac.glow}, transparent)`,
+                      opacity: isHov ? 1 : 0.5,
+                      boxShadow: isHov ? `0 0 12px ${ac.glow}` : 'none',
+                    }}
+                  />
+
+                  {/* card head */}
+                  <div className="cm-card-head">
+                    <div
+                      className="cm-card-icon-wrap"
+                      style={{ background: ac.soft }}
+                    >
+                      <Hash size={18} color={ac.glow} strokeWidth={2} />
+                    </div>
+                    <div className="cm-title-block">
+                      <div className="cm-card-name">{cat.name}</div>
+                      <div className="cm-card-count" style={{ color: ac.glow + 'aa' }}>
+                        <ChevronRight size={11} />
+                        {cat.subs.length} sub-item{cat.subs.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <button
+                      className="cm-del-btn"
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      title="Delete sector"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="cm-card-title">{cat.name}</div>
-                    <div className="cm-card-meta">
-                      <ChevronRight size={11} />
-                      {cat.subs.length} sub-item{cat.subs.length !== 1 ? 's' : ''}
+
+                  <div className="cm-divider" />
+
+                  {/* body */}
+                  <div className="cm-body">
+                    {cat.subs.length > 0 && (
+                      <div className="cm-tags-wrap">
+                        {cat.subs.map((s, i) => (
+                          <span
+                            key={i}
+                            className="cm-tag"
+                            style={{
+                              background: ac.soft,
+                              color: ac.glow,
+                              borderColor: ac.glow + '30',
+                            }}
+                          >
+                            {s}
+                            <button
+                              className="cm-tag-x"
+                              onClick={() => handleDeleteSub(cat.id, i)}
+                              aria-label={`Remove ${s}`}
+                              style={{ color: ac.glow }}
+                            >
+                              <X size={11} strokeWidth={2.5} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="cm-sub-row">
+                      <input
+                        className="cm-sub-input"
+                        type="text"
+                        placeholder="Add sub-item..."
+                        value={subVals[cat.id] || ''}
+                        onChange={e => setSubVals({ ...subVals, [cat.id]: e.target.value })}
+                        onKeyDown={e => e.key === 'Enter' && handleAddSub(cat.id)}
+                      />
+                      <button
+                        className="cm-sub-add"
+                        onClick={() => handleAddSub(cat.id)}
+                        style={{ color: ac.glow, borderColor: ac.glow + '30' }}
+                      >
+                        + Add
+                      </button>
                     </div>
                   </div>
                 </div>
-                <button
-                  className="cm-del-btn"
-                  onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                  title="Delete sector"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              );
+            })}
+          </div>
 
-              {/* SUB ITEMS + INPUT */}
-              <div className="cm-subs-area">
-                {cat.subs.length > 0 && (
-                  <div className="cm-subs-wrap">
-                    {cat.subs.map((s, i) => (
-                      <span key={i} className="cm-sub-tag">
-                        {s}
-                        <span
-                          className="cm-sub-x"
-                          onClick={() => handleDeleteSub(cat.id, i)}
-                          role="button"
-                          aria-label={`Remove ${s}`}
-                        >
-                          <X size={11} strokeWidth={2.5} />
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="cm-sub-input-row">
-                  <input
-                    className="cm-sub-input"
-                    type="text"
-                    placeholder="Add sub-item..."
-                    value={subVals[cat.id] || ''}
-                    onChange={e => setSubVals({ ...subVals, [cat.id]: e.target.value })}
-                    onKeyDown={e => handleKeyDown(e, cat.id)}
-                  />
-                  <button
-                    className="cm-add-sub-btn"
-                    onClick={() => handleAddSub(cat.id)}
-                  >
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          );
-        })}
+        </div>
       </div>
     </Page>
   );

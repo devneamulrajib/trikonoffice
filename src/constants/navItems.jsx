@@ -4,7 +4,7 @@ import {
   CreditCard, Layers, History, ShieldCheck,
   Settings as SettingsIcon,
   Headphones, Phone, PhoneCall, ArrowLeftRight,
-  MessageSquare, FileText, BookOpen, Users, Table2, Upload
+  MessageSquare, FileText, BookOpen, Users, Table2, Upload, UserPlus
 } from 'lucide-react';
 
 // ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
@@ -43,8 +43,9 @@ const NAVITEMS = [
     roles:   'all',
     permKey: 'clients',
     children: [
-      { id: 'clients_manage', icon: <Table2 size={16} />, label: 'Manage', roles: 'superadmin' },
-      { id: 'clients_import', icon: <Upload size={16} />, label: 'Import', roles: 'superadmin' },
+      { id: 'clients_manage', icon: <Table2 size={16} />,    label: 'All Client List', roles: 'superadmin' },
+      { id: 'clients_add',    icon: <UserPlus size={16} />,  label: 'Add Client',      roles: 'superadmin' },
+      { id: 'clients_import', icon: <Upload size={16} />,    label: 'Import',          roles: 'superadmin' },
     ],
   },
   {

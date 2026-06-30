@@ -33,6 +33,7 @@ import Requirements    from './pages/callcenter/Requirements';
 // ─── CLIENT PAGES ─────────────────────────────────────────────────────────────
 import ClientsHub      from './pages/clients/ClientsHub';
 import ManageClients   from './pages/clients/ManageClients';
+import AddClient       from './pages/clients/AddClient';
 import ImportClients   from './pages/clients/ImportClients';
 
 // ─── DEFAULT DB ───────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ const VIEW_PERM_MAP = {
   cc_requirements:  'cc_requirements',
   clients:          'clients',
   clients_manage:   'clients_manage',
+  clients_add:      'clients_add',
   clients_import:   'clients_import',
 };
 
@@ -448,6 +450,7 @@ const ClearSuite = () => {
           {/* ── Clients ─────────────────────────────────────────────────── */}
           {!isViewForbidden && view === 'clients'        && <ClientsHub    key="clh" setView={safeSetView} />}
           {!isViewForbidden && view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
+          {!isViewForbidden && view === 'clients_add'    && <AddClient     key="cla" {...ccProps} />}
           {!isViewForbidden && view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
 
         </AnimatePresence>

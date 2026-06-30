@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table2, Upload, ChevronRight } from 'lucide-react';
+import { Table2, Upload, UserPlus, ChevronRight } from 'lucide-react';
 import Page from '../../components/Page';
 
 const HubCard = ({ icon, label, description, color, onClick }) => (
@@ -69,6 +69,13 @@ const SECTIONS = [
     label: 'Manage Clients',
     description: 'View, edit, and organize your full client list.',
     color: '#EC4899',
+  },
+  {
+    id: 'clients_add',
+    icon: <UserPlus />,
+    label: 'Add Client',
+    description: 'Add a single client record manually.',
+    color: '#7C3AED',
   },
   {
     id: 'clients_import',

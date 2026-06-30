@@ -58,6 +58,22 @@ const STATUS_CONFIG = {
   rescheduled:{ label: 'Rescheduled', color: T.info,  bg: '#EFF6FF' },
 };
 
+// Date-based view tabs. "previous" = dueDate < today, "today" = dueDate === today,
+// "upcoming" = dueDate > today, "all" = no date filtering.
+const VIEW_TABS = [
+  { key: 'all',      label: 'All' },
+  { key: 'previous', label: 'Previous' },
+  { key: 'today',    label: 'Today' },
+  { key: 'upcoming', label: 'Upcoming' },
+];
+
+const EMPTY_TAB_COPY = {
+  all:      { title: 'No follow-ups yet',        body: 'Add a follow-up to keep track of your client callbacks.' },
+  previous: { title: 'No previous follow-ups',   body: 'Follow-ups will show up here once their due date has passed.' },
+  today:    { title: 'Nothing due today',        body: "You're all caught up for today." },
+  upcoming: { title: 'No upcoming follow-ups',   body: 'Add a follow-up with a future due date to see it here.' },
+};
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 const Badge = ({ config }) => (
   <span style={{
@@ -113,6 +129,36 @@ const StatCard = ({ label, value, color, bg }) => (
   }}>
     <div style={{ fontSize: 26, fontWeight: 800, color: color || T.text }}>{value}</div>
     <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 3, fontWeight: 500 }}>{label}</div>
+  </div>
+);
+
+// ─── View tabs (Previous / Today / Upcoming / All) ────────────────────────────
+const ViewTabs = ({ active, counts, onChange }) => (
+  <div style={{ display: 'flex', gap: 4, borderBottom: `1.5px solid ${T.border}`, marginBottom: 20 }}>
+    {VIEW_TABS.map(t => {
+      const isActive = active === t.key;
+      return (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          style={{
+            padding: '10px 2px 11px', marginRight: 28, background: 'none', border: 'none',
+            borderBottom: `2.5px solid ${isActive ? T.primary : 'transparent'}`,
+            color: isActive ? T.primary : T.textMid, fontWeight: 700, fontSize: 14,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+        >
+          {t.label}
+          <span style={{
+            background: isActive ? `${T.primary}15` : '#F1F5F9',
+            color: isActive ? T.primary : T.textMuted,
+            fontSize: 12, fontWeight: 700, padding: '1px 7px', borderRadius: 999,
+            minWidth: 18, textAlign: 'center',
+          }}>{counts[t.key] ?? 0}</span>
+        </button>
+      );
+    })}
   </div>
 );
 
@@ -421,6 +467,7 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy]       = useState('due_asc');
+  const [viewTab, setViewTab]     = useState('all'); // 'all' | 'previous' | 'today' | 'upcoming'
   const [modal, setModal]         = useState(null); // null | { mode: 'add'|'edit', data? }
 
   // ── Stats ──────────────────────────────────────────────────────────────
@@ -433,9 +480,22 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
     completed: followUps.filter(f => f.status === 'completed').length,
   }), [followUps, today]);
 
+  // ── Tab counts (date-based, independent of status/priority filters) ────
+  const tabCounts = useMemo(() => ({
+    all:      followUps.length,
+    previous: followUps.filter(f => f.dueDate < today).length,
+    today:    followUps.filter(f => f.dueDate === today).length,
+    upcoming: followUps.filter(f => f.dueDate > today).length,
+  }), [followUps, today]);
+
   // ── Filtered + sorted list ─────────────────────────────────────────────
   const visible = useMemo(() => {
     let list = [...followUps];
+
+    if (viewTab === 'previous') list = list.filter(f => f.dueDate < today);
+    else if (viewTab === 'today') list = list.filter(f => f.dueDate === today);
+    else if (viewTab === 'upcoming') list = list.filter(f => f.dueDate > today);
+
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(f =>
@@ -458,7 +518,14 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
       return 0;
     });
     return list;
-  }, [followUps, search, filterStatus, filterPriority, sortBy]);
+  }, [followUps, search, filterStatus, filterPriority, sortBy, viewTab, today]);
+
+  // ── Tab change: also nudge sort order to whatever's most useful ────────
+  const handleTabChange = (key) => {
+    setViewTab(key);
+    if (key === 'previous') setSortBy('due_desc'); // most recently passed first
+    else if (key === 'upcoming') setSortBy('due_asc'); // soonest first
+  };
 
   // ── Actions ────────────────────────────────────────────────────────────
   const updateFU = (id, patch) => {
@@ -506,6 +573,8 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
     setModal(null);
   };
 
+  const emptyCopy = EMPTY_TAB_COPY[viewTab] || EMPTY_TAB_COPY.all;
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
 
@@ -534,6 +603,9 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
         <StatCard label="Due Today" value={stats.dueToday} color={T.info} bg="#EFF6FF" />
         <StatCard label="Completed" value={stats.completed} color={T.success} bg="#ECFDF5" />
       </div>
+
+      {/* View tabs: Previous / Today / Upcoming / All */}
+      <ViewTabs active={viewTab} counts={tabCounts} onChange={handleTabChange} />
 
       {/* Filters bar */}
       <div style={{
@@ -603,12 +675,18 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
         }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
           <h3 style={{ fontSize: 17, fontWeight: 700, color: T.text, margin: '0 0 8px' }}>
-            {followUps.length === 0 ? 'No follow-ups yet' : 'No results match your filters'}
+            {followUps.length === 0
+              ? emptyCopy.title
+              : tabCounts[viewTab] === 0
+                ? emptyCopy.title
+                : 'No results match your filters'}
           </h3>
           <p style={{ color: T.textMuted, fontSize: 14, margin: '0 0 20px' }}>
             {followUps.length === 0
-              ? 'Add a follow-up to keep track of your client callbacks.'
-              : 'Try adjusting your search or filter.'}
+              ? emptyCopy.body
+              : tabCounts[viewTab] === 0
+                ? emptyCopy.body
+                : 'Try adjusting your search or filter.'}
           </p>
           {followUps.length === 0 && (
             <button onClick={() => setModal({ mode: 'add' })} style={{

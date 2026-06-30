@@ -386,7 +386,7 @@ const ClearSuite = () => {
 
   const isSuperAdmin     = user?.role === 'superadmin';
   const isViewForbidden  = !userCan(view);
-  const ccProps          = { db, setDb, logAction, user };
+  const ccProps          = { db, setDb, logAction, user, setView: safeSetView };
 
   return (
     <div style={{

@@ -22,6 +22,7 @@ const ICONS = {
   clock:    "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2",
   notes:    "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8",
   chevron:  "M6 9l6 6 6-6",
+  chevronLeft: "M15 18l-6-6 6-6",
   refresh:  "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
   alert:    "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01",
   done:     "M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3",
@@ -459,7 +460,7 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const FollowUp = ({ db, setDb, logAction, user }) => {
+const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const followUps = db?.followUps || [];
   const clients   = db?.clients   || [];
 
@@ -577,6 +578,17 @@ const FollowUp = ({ db, setDb, logAction, user }) => {
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+
+      {/* Back to Call Center */}
+      {typeof setView === 'function' && (
+        <button onClick={() => setView('call_center')} style={{
+          display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none',
+          padding: 0, marginBottom: 14, cursor: 'pointer', color: T.textMid,
+          fontSize: 13.5, fontWeight: 600,
+        }}>
+          <Icon d={ICONS.chevronLeft} size={15} color={T.textMid} /> Call Center
+        </button>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>

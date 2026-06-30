@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table2, Upload, UserPlus, ChevronRight } from 'lucide-react';
+import { Upload, UserPlus, ChevronRight } from 'lucide-react';
 import Page from '../../components/Page';
 
 const HubCard = ({ icon, label, description, color, onClick }) => (
@@ -63,13 +63,6 @@ const HubCard = ({ icon, label, description, color, onClick }) => (
 );
 
 const SECTIONS = [
-  {
-    id: 'clients_manage',
-    icon: <Table2 />,
-    label: 'Manage Clients',
-    description: 'View, edit, and organize your full client list.',
-    color: '#EC4899',
-  },
   {
     id: 'clients_add',
     icon: <UserPlus />,

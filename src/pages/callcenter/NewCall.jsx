@@ -74,16 +74,24 @@ const CALL_OUTCOMES = [
   { value:'Wrong Number', label:'Wrong Number', icon: AlertCircle,   color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
 ];
 
+// Only the 4 lead statuses requested
 const LEAD_STATUSES = [
-  { value:'New',            color: C.blue,   bg: C.blueBg   },
-  { value:'Contacted',      color: C.purple, bg: C.purpleBg },
   { value:'Interested',     color: C.green,  bg: C.greenBg  },
   { value:'Not Interested', color: C.slate,  bg: C.slateBg  },
-  { value:'Converted',      color: C.green,  bg: C.greenBg  },
+  { value:'Followup',       color: C.purple, bg: C.purpleBg },
   { value:'Dropped',        color: C.red,    bg: C.redBg    },
 ];
 
-const CONTACT_METHODS = ['Call','WhatsApp','SMS','Email'];
+// Only Call / WhatsApp as contact method
+const CONTACT_METHODS = ['Call','WhatsApp'];
+
+// Offer discussed options (with "Other" as a free-text option)
+const OFFER_OPTIONS = [
+  { value:'projects',  label:'Projects' },
+  { value:'land_flat', label:'Land / Flat Plan' },
+  { value:'site_visit',label:'Free Site Visit' },
+  { value:'other',     label:'Other' },
+];
 
 const emptyClient = () => ({
   id: Date.now(), name:'', profession:'', designation:'', company:'',
@@ -349,7 +357,6 @@ const Grid = ({ cols='1fr 1fr', gap=13, children, style }) => (
 );
 
 // ─── Dashboard Stat Box ───────────────────────────────────────────────────────
-// Used for both the "summary" top row and the "source breakdown" row
 const StatBox = ({ icon: Icon, label, value, color, bg, border, active, onClick, dot, sublabel }) => {
   const [hov, setHov] = useState(false);
   const isClickable = Boolean(onClick);
@@ -631,6 +638,11 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
   const waLink  = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g,'')}` : null;
   const ready   = Boolean(lead.coStatus);
 
+  // Auto-enable the follow-up scheduler when lead status is set to "Followup"
+  useEffect(() => {
+    if (lead.callStatus === 'Followup' && !fuOn) setFuOn(true);
+  }, [lead.callStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{ position:'fixed', inset:0, background:'rgba(2,6,23,.72)', backdropFilter:'blur(6px)',
@@ -723,34 +735,28 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
 
               <Card>
                 <CardHeader icon={Gift} title="Offer discussed" subtitle={`Property: ${lead.propertyType||'—'}`}/>
-                <Select value={lead.offers||''} onChange={e=>onChange('offers',e.target.value)}>
+                <Select value={lead.offers||''} onChange={e=>{
+                  const v = e.target.value;
+                  onChange('offers', v);
+                  if (v !== 'other') onChange('offersOther','');
+                }}>
                   <option value="">None selected</option>
-                  <option value="projects">Projects</option>
-                  <option value="land_flat">Land / Flat Plan</option>
-                  <option value="site_visit">Free Site Visit</option>
+                  {OFFER_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
+                {lead.offers === 'other' && (
+                  <div style={{ marginTop:10 }}>
+                    <FieldLabel>Specify offer</FieldLabel>
+                    <Input value={lead.offersOther||''} onChange={e=>onChange('offersOther',e.target.value)}
+                      placeholder="Describe the offer discussed…"/>
+                  </div>
+                )}
               </Card>
             </div>
 
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card>
                 <CardHeader icon={CheckCircle2} title="Lead status" subtitle="Update after this call"/>
-                <div style={{ marginBottom:14 }}>
-                  <LeadStatusPicker value={lead.callStatus||'New'} onChange={v=>onChange('callStatus',v)}/>
-                </div>
-                <FieldLabel>Conversion probability</FieldLabel>
-                <div style={{ position:'relative', marginBottom:10 }}>
-                  <Input type="number" min="0" max="100"
-                    value={lead.percentage??0} onChange={e=>onChange('percentage',Number(e.target.value))}
-                    style={{ paddingRight:28 }}/>
-                  <span style={{ position:'absolute', right:11, top:'50%', transform:'translateY(-50%)',
-                    fontSize:13, color:C.textMuted, pointerEvents:'none' }}>%</span>
-                </div>
-                <div style={{ height:5, borderRadius:C.r.full, background:C.border, overflow:'hidden' }}>
-                  <div style={{ height:'100%', borderRadius:C.r.full, transition:'width .3s',
-                    width:`${Math.min(100,Math.max(0,lead.percentage||0))}%`,
-                    background:`linear-gradient(90deg,${C.accentDark},${C.accent})` }}/>
-                </div>
+                <LeadStatusPicker value={lead.callStatus||''} onChange={v=>onChange('callStatus',v)}/>
               </Card>
 
               <Card style={{ background:fuOn?'#FFFDF7':C.surface }}>
@@ -785,17 +791,11 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                           </Select>
                         </div>
                       </Grid>
-                      <div style={{ marginTop:12, marginBottom:12 }}>
-                        <FieldLabel>Assign to</FieldLabel>
-                        <Select value={lead.followupCaller||user?.firstName||'Admin'} onChange={e=>onChange('followupCaller',e.target.value)}>
-                          <option>{user?.firstName||'Admin'}</option>
-                          <option>Admin 1</option>
-                          <option>Agent 1</option>
-                        </Select>
+                      <div style={{ marginTop:12 }}>
+                        <FieldLabel>Follow-up note</FieldLabel>
+                        <Textarea value={lead.followupNote||''} onChange={e=>onChange('followupNote',e.target.value)}
+                          placeholder="What to discuss on the next call…" style={{ minHeight:64 }}/>
                       </div>
-                      <FieldLabel>Follow-up note</FieldLabel>
-                      <Textarea value={lead.followupNote||''} onChange={e=>onChange('followupNote',e.target.value)}
-                        placeholder="What to discuss on the next call…" style={{ minHeight:64 }}/>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -925,9 +925,9 @@ const NewCall = ({ db, setDb, logAction, user }) => {
 
   const openTakeCall = lead => setActiveLead({
     ...lead, coComment:'', coStatus:'', coMethod:'Call',
+    offers:'', offersOther:'',
     followupDate:'', followupType:'Regular',
-    followupCaller: user?.firstName || 'Admin',
-    followupNote:'', callStatus:'New', percentage:0,
+    followupNote:'', callStatus:'',
   });
   const updateActive = (k, v) => setActiveLead(p => ({...p,[k]:v}));
 
@@ -936,16 +936,30 @@ const NewCall = ({ db, setDb, logAction, user }) => {
   const submitCall = () => {
     if (!activeLead) return;
     const now = new Date().toISOString();
+
+    const offerLabel = activeLead.offers === 'other'
+      ? (activeLead.offersOther || 'Other')
+      : (OFFER_OPTIONS.find(o=>o.value===activeLead.offers)?.label || '');
+
     const entry = {
-      id:Date.now(), clientName:activeLead.name, phone:activeLead.phone,
+      id:Date.now(), clientId:activeLead.id, clientName:activeLead.name, phone:activeLead.phone,
       email:activeLead.email||'',
       subject:`${activeLead.propertyType||''} — Lead follow-up`.trim(),
       priority:'medium', notes:activeLead.coComment||'',
       agent:user?.firstName||'Unknown', type:'inbound', duration:0,
       date:new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}),
       timestamp:now, propertyType:activeLead.propertyType, source:activeLead.source,
-      callStatus:activeLead.callStatus,
+      callStatus:activeLead.callStatus, callOutcome:activeLead.coStatus,
+      callMethod:activeLead.coMethod, offer:offerLabel,
     };
+
+    // Map the new lead-status set onto the existing client.status field
+    let nextClientStatus;
+    if (activeLead.callStatus === 'Dropped')      nextClientStatus = 'Lost';
+    else if (activeLead.callStatus === 'Interested')     nextClientStatus = 'Negotiation';
+    else if (activeLead.callStatus === 'Not Interested') nextClientStatus = 'Contacted';
+    else if (activeLead.callStatus === 'Followup')       nextClientStatus = 'Contacted';
+
     const hasFu = Boolean(activeLead.followupDate);
     setDb(prev => {
       const next = {
@@ -953,17 +967,29 @@ const NewCall = ({ db, setDb, logAction, user }) => {
         callLogs:[entry,...(prev.callLogs||[])],
         clients:(prev.clients||[]).map(c =>
           c.id===activeLead.id
-            ? {...c, calledAt:now, status:activeLead.callStatus==='Converted'?'Closed':c.status}
+            ? {...c, calledAt:now, status: nextClientStatus || c.status}
             : c
         ),
       };
       if (hasFu) {
         next.followUps = [{
-          id:Date.now()+1, client:activeLead.name, phone:activeLead.phone,
+          id:Date.now()+1, clientId:activeLead.id, client:activeLead.name, clientName:activeLead.name,
+          phone:activeLead.phone, clientPhone:activeLead.phone,
           subject:activeLead.followupNote?.trim()||`${activeLead.propertyType||'Lead'} follow-up`,
+          note:activeLead.followupNote||'',
           dueDate:activeLead.followupDate,
           priority:followupPriorityMap[activeLead.followupType]||'medium',
-          status:'pending', createdBy:activeLead.followupCaller||user?.firstName||'Admin',
+          followupType:activeLead.followupType||'Regular',
+          status:'pending', createdBy:user?.firstName||'Admin',
+          // Snapshot of what happened during the call, so the Follow-up page
+          // can show context without needing to look anything else up.
+          callOutcome:activeLead.coStatus, callMethod:activeLead.coMethod,
+          callNote:activeLead.coComment||'', leadStatus:activeLead.callStatus,
+          offer:offerLabel,
+          propertyType:activeLead.propertyType, source:activeLead.source,
+          email:activeLead.email||'', company:activeLead.company||'',
+          address:activeLead.address||'', location:activeLead.location||'',
+          budgetMin:activeLead.budgetMin||'', budgetMax:activeLead.budgetMax||'',
         }, ...(prev.followUps||[])];
       }
       return next;

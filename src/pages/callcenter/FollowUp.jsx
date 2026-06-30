@@ -26,6 +26,7 @@ const ICONS = {
   refresh:  "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
   alert:    "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01",
   done:     "M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3",
+  phoneCall:"M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.18 2 2 0 012.22 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z",
 };
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -57,6 +58,14 @@ const STATUS_CONFIG = {
   completed: { label: 'Completed', color: T.success,  bg: '#ECFDF5' },
   missed:    { label: 'Missed',    color: T.danger,   bg: '#FEF2F2' },
   rescheduled:{ label: 'Rescheduled', color: T.info,  bg: '#EFF6FF' },
+};
+
+// Lead status pill colors — matches the 4-option set used on the New Calls page
+const LEAD_STATUS_CONFIG = {
+  'Interested':     { color: T.success,  bg: '#ECFDF5' },
+  'Not Interested': { color: T.textMuted,bg: '#F8FAFC' },
+  'Followup':       { color: '#8B5CF6',  bg: '#F5F3FF' },
+  'Dropped':        { color: T.danger,   bg: '#FEF2F2' },
 };
 
 // Date-based view tabs. "previous" = dueDate < today, "today" = dueDate === today,
@@ -329,9 +338,101 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
   );
 };
 
+// ─── Call context block (what happened on the last call) ─────────────────────
+const CallContext = ({ fu, expanded, onToggle }) => {
+  const hasCallInfo = fu.callOutcome || fu.callNote || fu.offer || fu.leadStatus;
+  const hasClientInfo = fu.email || fu.company || fu.address || fu.location || fu.budgetMin || fu.budgetMax || fu.propertyType || fu.source;
+
+  if (!hasCallInfo && !hasClientInfo) return null;
+
+  const leadCfg = LEAD_STATUS_CONFIG[fu.leadStatus];
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button onClick={onToggle} style={{
+        display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none',
+        cursor: 'pointer', padding: '4px 0', fontSize: 12.5, fontWeight: 700, color: T.primary,
+      }}>
+        <Icon d={ICONS.phoneCall} size={13} color={T.primary} />
+        {expanded ? 'Hide call details' : 'Show call details'}
+        <span style={{ display: 'inline-flex', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+          <Icon d={ICONS.chevron} size={12} color={T.primary} />
+        </span>
+      </button>
+
+      {expanded && (
+        <div style={{
+          marginTop: 8, padding: '12px 14px', background: '#F8FAFC',
+          border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          {/* Call outcome / method / lead status row */}
+          {(fu.callOutcome || fu.callMethod || fu.leadStatus || fu.offer) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {fu.callOutcome && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.textMid, background: '#fff',
+                  border: `1px solid ${T.border}`, borderRadius: 999, padding: '3px 10px' }}>
+                  📞 {fu.callOutcome}
+                </span>
+              )}
+              {fu.callMethod && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.textMid, background: '#fff',
+                  border: `1px solid ${T.border}`, borderRadius: 999, padding: '3px 10px' }}>
+                  via {fu.callMethod}
+                </span>
+              )}
+              {fu.leadStatus && leadCfg && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: leadCfg.color, background: leadCfg.bg,
+                  border: `1px solid ${leadCfg.color}40`, borderRadius: 999, padding: '3px 10px' }}>
+                  {fu.leadStatus}
+                </span>
+              )}
+              {fu.offer && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#92400E', background: '#FFFBEB',
+                  border: `1px solid #FDE68A`, borderRadius: 999, padding: '3px 10px' }}>
+                  🎁 {fu.offer}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Note from the call log */}
+          {fu.callNote && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                Note from call
+              </div>
+              <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.5 }}>{fu.callNote}</div>
+            </div>
+          )}
+
+          {/* Client snapshot */}
+          {hasClientInfo && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+                Client details
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                {fu.propertyType && <div style={{ fontSize: 13, color: T.textMid }}>Property: <span style={{ color: T.text, fontWeight: 600 }}>{fu.propertyType}</span></div>}
+                {fu.source && <div style={{ fontSize: 13, color: T.textMid }}>Source: <span style={{ color: T.text, fontWeight: 600 }}>{fu.source}</span></div>}
+                {fu.email && <div style={{ fontSize: 13, color: T.textMid }}>Email: <span style={{ color: T.text, fontWeight: 600 }}>{fu.email}</span></div>}
+                {fu.company && <div style={{ fontSize: 13, color: T.textMid }}>Company: <span style={{ color: T.text, fontWeight: 600 }}>{fu.company}</span></div>}
+                {(fu.budgetMin || fu.budgetMax) && <div style={{ fontSize: 13, color: T.textMid }}>Budget: <span style={{ color: T.text, fontWeight: 600 }}>{fu.budgetMin || '0'} – {fu.budgetMax || '0'}</span></div>}
+                {fu.location && <div style={{ fontSize: 13, color: T.textMid }}>Location: <span style={{ color: T.text, fontWeight: 600 }}>{fu.location}</span></div>}
+                {fu.address && <div style={{ fontSize: 13, color: T.textMid, gridColumn: '1/-1' }}>Address: <span style={{ color: T.text, fontWeight: 600 }}>{fu.address}</span></div>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Follow-up Card ───────────────────────────────────────────────────────────
 const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
   const [expanded, setExpanded] = useState(false);
+  const [callExpanded, setCallExpanded] = useState(false);
   const pc = PRIORITY_CONFIG[fu.priority] || PRIORITY_CONFIG.medium;
   const sc = STATUS_CONFIG[fu.status] || STATUS_CONFIG.pending;
   const today = new Date().toISOString().slice(0, 10);
@@ -382,6 +483,9 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
           <span style={{ fontSize: 13, fontWeight: 600, color: overdue ? T.danger : T.textMid }}>
             {overdue ? '⚠ Overdue · ' : ''}Due {fu.dueDate}
           </span>
+          {fu.followupType && (
+            <span style={{ fontSize: 11.5, color: T.textMuted, marginLeft: 4 }}>· {fu.followupType}</span>
+          )}
         </div>
 
         {/* Note preview */}
@@ -399,6 +503,9 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
             fontSize: 12.5, color: T.primary, fontWeight: 600, padding: '2px 0',
           }}>{expanded ? 'Show less' : 'Show more'}</button>
         )}
+
+        {/* What happened on the call that created this follow-up */}
+        <CallContext fu={fu} expanded={callExpanded} onToggle={() => setCallExpanded(v => !v)} />
 
         {/* Action buttons */}
         {fu.status === 'pending' && (

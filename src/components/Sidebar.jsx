@@ -137,7 +137,11 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
   const showCore       = visibleIds.has('dashboard') || visibleIds.has('add_expense') || visibleIds.has('approvals');
   const showFinance    = visibleIds.has('budget_request') || visibleIds.has('budget_history') || visibleIds.has('reports') || visibleIds.has('salary_advance');
   const showSystem     = visibleIds.has('categories') || visibleIds.has('activity') || visibleIds.has('settings');
-  const showClientMgmt = visibleGroupIds.has('clients') || visibleGroupIds.has('call_center');
+  const showClientMgmt =
+    visibleGroupIds.has('clients') ||
+    visibleGroupIds.has('call_center') ||
+    visibleIds.has('cc_transfer') ||
+    visibleIds.has('cc_call_logs');
 
   // Filter nav items by search
   const filter = (id) => {
@@ -274,9 +278,11 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
         {showClientMgmt && <SectionLabel>Client Management</SectionLabel>}
         {NAVITEMS
-          .filter(i => i.type === 'group' && canSee(i, user))
+          .filter(i => ['clients', 'call_center', 'cc_transfer', 'cc_call_logs'].includes(i.id) && canSee(i, user))
           .map(item => (
-            <GroupBtn key={item.id} item={item} view={view} setView={setView} />
+            item.type === 'group'
+              ? <GroupBtn key={item.id} item={item} view={view} setView={setView} />
+              : <NavBtn key={item.id} item={item} view={view} setView={setView} pendingCount={pendingCount} />
           ))
         }
 

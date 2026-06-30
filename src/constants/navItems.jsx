@@ -39,7 +39,7 @@ const NAVITEMS = [
     type:    'group',
     id:      'clients',
     icon:    <Users size={18} />,
-    label:   'Clients',
+    label:   'Add Client',
     roles:   'all',
     permKey: 'clients',
     children: [
@@ -51,18 +51,18 @@ const NAVITEMS = [
     type:    'group',
     id:      'call_center',
     icon:    <Headphones size={18} />,
-    label:   'Call Center',
+    label:   'My Center',
     roles:   'all',
     permKey: 'call_center',
     children: [
-      { id: 'cc_new_call',     icon: <Phone          size={16} />, label: 'New Call',         roles: 'all', permKey: 'cc_new_call'     },
-      { id: 'cc_follow_up',    icon: <PhoneCall      size={16} />, label: 'Follow Up',        roles: 'all', permKey: 'cc_follow_up'    },
-      { id: 'cc_transfer',     icon: <ArrowLeftRight size={16} />, label: 'Transfer Request', roles: 'all', permKey: 'cc_transfer'     },
-      { id: 'cc_comments',     icon: <MessageSquare  size={16} />, label: 'Comments',         roles: 'all', permKey: 'cc_comments'     },
-      { id: 'cc_call_logs',    icon: <BookOpen       size={16} />, label: 'Call Logs',        roles: 'all', permKey: 'cc_call_logs'    },
-      { id: 'cc_requirements', icon: <FileText       size={16} />, label: 'Requirements',     roles: 'all', permKey: 'cc_requirements' },
+      { id: 'cc_new_call',     icon: <Phone          size={16} />, label: 'New Call',     roles: 'all', permKey: 'cc_new_call'     },
+      { id: 'cc_follow_up',    icon: <PhoneCall      size={16} />, label: 'Follow Up',    roles: 'all', permKey: 'cc_follow_up'    },
+      { id: 'cc_comments',     icon: <MessageSquare  size={16} />, label: 'Comments',     roles: 'all', permKey: 'cc_comments'     },
+      { id: 'cc_requirements', icon: <FileText       size={16} />, label: 'Requirements', roles: 'all', permKey: 'cc_requirements' },
     ],
   },
+  { id: 'cc_transfer',  icon: <ArrowLeftRight size={18} />, label: 'Client Transfer Request', roles: 'all', permKey: 'cc_transfer'  },
+  { id: 'cc_call_logs', icon: <BookOpen       size={18} />, label: 'Call Logs',               roles: 'all', permKey: 'cc_call_logs' },
 ];
 
 export default NAVITEMS;

@@ -43,11 +43,12 @@ const NAVITEMS = [
     roles:   'all',
     permKey: 'clients',
     children: [
-      { id: 'clients_manage', icon: <Table2 size={16} />,    label: 'All Client List', roles: 'superadmin' },
-      { id: 'clients_add',    icon: <UserPlus size={16} />,  label: 'Add Client',      roles: 'superadmin' },
-      { id: 'clients_import', icon: <Upload size={16} />,    label: 'Import',          roles: 'superadmin' },
+      { id: 'clients_add',    icon: <UserPlus size={16} />, label: 'Add Client', roles: 'superadmin' },
+      { id: 'clients_import', icon: <Upload size={16} />,   label: 'Import',     roles: 'superadmin' },
     ],
   },
+  // Standalone top-level item — sits between the "Add Client" group and "My Center" group
+  { id: 'clients_manage', icon: <Table2 size={18} />, label: 'All Clients', roles: 'all', permKey: 'clients_manage' },
   {
     type:    'group',
     id:      'call_center',

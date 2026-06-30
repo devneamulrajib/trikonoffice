@@ -139,6 +139,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
   const showSystem     = visibleIds.has('categories') || visibleIds.has('activity') || visibleIds.has('settings');
   const showClientMgmt =
     visibleGroupIds.has('clients') ||
+    visibleIds.has('clients_manage') ||
     visibleGroupIds.has('call_center') ||
     visibleIds.has('cc_transfer') ||
     visibleIds.has('cc_call_logs');
@@ -278,7 +279,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
         {showClientMgmt && <SectionLabel>Client Management</SectionLabel>}
         {NAVITEMS
-          .filter(i => ['clients', 'call_center', 'cc_transfer', 'cc_call_logs'].includes(i.id) && canSee(i, user))
+          .filter(i => ['clients', 'clients_manage', 'call_center', 'cc_transfer', 'cc_call_logs'].includes(i.id) && canSee(i, user))
           .map(item => (
             item.type === 'group'
               ? <GroupBtn key={item.id} item={item} view={view} setView={setView} />

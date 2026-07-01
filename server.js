@@ -15,6 +15,11 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
+// Roles that are allowed to be set via the API. 'superadmin' is intentionally
+// excluded — it's only ever assigned via the SUPER_ADMIN_EMAIL/PASSWORD env
+// vars, never through user creation, to avoid accidentally minting one.
+const ASSIGNABLE_ROLES = new Set(['user', 'admin', 'call_center']);
+
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token' });
@@ -26,8 +31,11 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// Was superadmin-only before. Manage Users is now allowed for 'admin' too,
+// matching the frontend (Sidebar.jsx / App.jsx) which lets admins see and
+// use that page.
 const adminOnly = (req, res, next) => {
-  if (req.user.role !== 'superadmin')
+  if (req.user.role !== 'superadmin' && req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only' });
   next();
 };
@@ -46,7 +54,7 @@ async function main() {
       name        VARCHAR(100)  NOT NULL,
       email       VARCHAR(100)  UNIQUE NOT NULL,
       password    VARCHAR(255)  NOT NULL,
-      role        ENUM('superadmin','user') DEFAULT 'user',
+      role        ENUM('superadmin','admin','user','call_center') DEFAULT 'user',
       permissions JSON          DEFAULT NULL,
       created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
     )
@@ -57,6 +65,18 @@ async function main() {
     console.log('Added permissions column');
   } catch (err) {
     if (err.code !== 'ER_DUP_FIELDNAME') console.error('Alter error:', err);
+  }
+
+  // Widen the role enum for existing tables created before 'admin' and
+  // 'call_center' were added. Safe to run every boot — MODIFY COLUMN is a
+  // no-op if the definition already matches.
+  try {
+    await pool.execute(
+      `ALTER TABLE users MODIFY COLUMN role ENUM('superadmin','admin','user','call_center') DEFAULT 'user'`
+    );
+    console.log('Widened role enum');
+  } catch (err) {
+    console.error('Widen role enum error:', err);
   }
 
   await pool.execute(`
@@ -124,14 +144,18 @@ async function main() {
 
   app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
     try {
-      const { name, email, password, permissions = [] } = req.body;
+      const { name, email, password, role = 'user', permissions = [] } = req.body;
       if (!name || !email || !password)
         return res.status(400).json({ message: 'All fields required' });
+
+      // Never trust the client to hand out superadmin. Anything not in the
+      // assignable set silently falls back to 'user'.
+      const safeRole = ASSIGNABLE_ROLES.has(role) ? role : 'user';
 
       const hashed = await bcrypt.hash(password, 10);
       await pool.execute(
         'INSERT INTO users (name, email, password, role, permissions) VALUES (?, ?, ?, ?, ?)',
-        [name, email, hashed, 'user', JSON.stringify(permissions)]
+        [name, email, hashed, safeRole, JSON.stringify(permissions)]
       );
       res.json({ message: 'User created' });
     } catch (err) {
@@ -174,6 +198,22 @@ async function main() {
       res.json({ message: 'Permissions updated' });
     } catch (err) {
       console.error('Update permissions error:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  // NEW: lets you fix an existing user's role (e.g. the 'test' account
+  // created before this fix) without deleting and recreating them.
+  app.patch('/api/users/:id/role', authMiddleware, adminOnly, async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!ASSIGNABLE_ROLES.has(role))
+        return res.status(400).json({ message: 'Invalid role' });
+
+      await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
+      res.json({ message: 'Role updated' });
+    } catch (err) {
+      console.error('Update role error:', err);
       res.status(500).json({ message: 'Server error' });
     }
   });

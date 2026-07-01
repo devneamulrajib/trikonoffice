@@ -4,7 +4,7 @@ import {
   CreditCard, Layers, History, ShieldCheck,
   Settings as SettingsIcon,
   Headphones, Phone, PhoneCall, ArrowLeftRight,
-  MessageSquare, FileText, BookOpen, Users, Table2, Upload, UserPlus
+  BookOpen, Users, Table2, Upload, UserPlus
 } from 'lucide-react';
 
 // ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
@@ -58,10 +58,8 @@ const NAVITEMS = [
     permKey: 'call_center',
     defaultChild: 'cc_new_call',
     children: [
-      { id: 'cc_new_call',     icon: <Phone          size={16} />, label: 'New Call',     roles: 'all', permKey: 'cc_new_call'     },
-      { id: 'cc_follow_up',    icon: <PhoneCall      size={16} />, label: 'Follow Up',    roles: 'all', permKey: 'cc_follow_up'    },
-      { id: 'cc_comments',     icon: <MessageSquare  size={16} />, label: 'Comments',     roles: 'all', permKey: 'cc_comments'     },
-      { id: 'cc_requirements', icon: <FileText       size={16} />, label: 'Requirements', roles: 'all', permKey: 'cc_requirements' },
+      { id: 'cc_new_call',  icon: <Phone     size={16} />, label: 'New Call',  roles: 'all', permKey: 'cc_new_call'  },
+      { id: 'cc_follow_up', icon: <PhoneCall size={16} />, label: 'Follow Up', roles: 'all', permKey: 'cc_follow_up' },
     ],
   },
   { id: 'cc_transfer',  icon: <ArrowLeftRight size={18} />, label: 'Client Transfer Request', roles: 'all', permKey: 'cc_transfer'  },

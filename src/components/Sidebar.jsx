@@ -7,6 +7,7 @@ const canSee = (item, user) => {
   if (!item) return false;
   if (user?.role === 'superadmin') return true;
   if (item.roles === 'superadmin') return false;
+  if (item.hideFor?.includes(user?.role)) return false;
   if (!item.permKey) return true;
   const perms = Array.isArray(user?.permissions) ? user.permissions : [];
   return perms.includes(item.permKey);
@@ -451,7 +452,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
               {user?.name || user?.firstName || 'User'}
             </div>
             <div style={{ fontSize: 11, color: '#9CA3AF' }}>
-              {user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
+              {user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : user?.role === 'call_center' ? 'Call Center' : 'User'}
             </div>
           </div>
         </div>

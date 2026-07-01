@@ -39,8 +39,9 @@ const DEFAULT_PERMISSIONS = ALL_SECTIONS.map(s => s.key);
 // 'superadmin' is intentionally not selectable here — it should only be set
 // directly in the database to avoid accidentally minting new superadmins.
 const ROLE_OPTIONS = [
-  { value: 'user',  label: 'Regular (HR / Call Center)' },
-  { value: 'admin', label: 'Admin (can manage users)' },
+  { value: 'user',        label: 'Admin & HR staff' },
+  { value: 'call_center', label: 'Call Center' },
+  { value: 'admin',       label: 'Admin (can manage users)' },
 ];
 
 // ─── GROUP COLOR MAP ──────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ const formatSince = (d) => {
 const roleLabel = (role) => {
   if (role === 'superadmin') return 'Super Admin';
   if (role === 'admin') return 'Admin';
+  if (role === 'call_center') return 'Call Center';
   return 'User';
 };
 

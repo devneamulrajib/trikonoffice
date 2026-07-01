@@ -57,21 +57,19 @@ const DEFAULT_DB = {
   clients:          [],
 };
 
-// ─── SUPERADMIN-ONLY VIEWS ────────────────────────────────────────────────────
-const SUPERADMIN_ONLY_VIEWS = new Set([
-  'approvals',
-  'budget_request',
-  'reports',
-  'categories',
-  'activity',
-  'manage_users',
-]);
-
 // ─── VIEW → PERMISSION MAP ────────────────────────────────────────────────────
+// Every view except 'dashboard' and 'manage_users' is gated purely by permKey
+// now (superadmin always passes via userCan, see below). This must stay in
+// sync with the permKeys used in constants/navItems.jsx and ManageUsers.jsx.
 const VIEW_PERM_MAP = {
   add_expense:      'add_expense',
+  approvals:        'approvals',
+  budget_request:   'budget_request',
   budget_history:   'budget_history',
+  reports:          'reports',
   salary_advance:   'salary_advance',
+  categories:       'categories',
+  activity:         'activity',
   settings:         'settings',
   call_center:      'call_center',
   cc_new_call:      'cc_new_call',
@@ -89,6 +87,11 @@ const VIEW_PERM_MAP = {
 // ─── DATA SYNC CONFIG ─────────────────────────────────────────────────────────
 const LOCAL_CACHE_KEY  = 'clear_db_v6';
 const SYNC_DEBOUNCE_MS = 600;
+
+// ─── ROLE / LANDING HELPERS ───────────────────────────────────────────────────
+// Call center users never see the finance Dashboard — they land straight on
+// "New Call" instead, both right after login/signup and on session restore.
+const defaultViewFor = (u) => (u?.role === 'call_center' ? 'cc_new_call' : 'dashboard');
 
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
 const Forbidden = ({ onBack }) => (
@@ -118,7 +121,7 @@ const Forbidden = ({ onBack }) => (
         cursor:       'pointer',
       }}
     >
-      Go to Dashboard
+      Go Home
     </button>
   </div>
 );
@@ -255,9 +258,11 @@ const ClearSuite = () => {
     const s = localStorage.getItem('clear_session_v6');
     const t = localStorage.getItem('token');
     if (s && t) {
+      const restoredUser = JSON.parse(s);
       tokenRef.current = t;
-      setUser(JSON.parse(s));
+      setUser(restoredUser);
       setIsAuth(true);
+      setView(defaultViewFor(restoredUser));
     }
   }, []);
 
@@ -329,22 +334,28 @@ const ClearSuite = () => {
     tokenRef.current = t;
     setUser(u);
     setIsAuth(true);
-    setView('dashboard');
+    setView(defaultViewFor(u));
   };
 
   // ── Permission helpers ───────────────────────────────────────────────────
   const userCan = (v) => {
     if (!user) return false;
     if (user.role === 'superadmin') return true;
-    if (SUPERADMIN_ONLY_VIEWS.has(v)) return false;
-    if (v === 'dashboard') return true;
+
+    // Manage Users: superadmin (above) or admin only — never permission-based.
+    if (v === 'manage_users') return user.role === 'admin';
+
+    // Dashboard is the default home for everyone EXCEPT call center users,
+    // who land on "New Call" instead and never see the finance dashboard.
+    if (v === 'dashboard') return user.role !== 'call_center';
+
     const requiredPerm = VIEW_PERM_MAP[v];
     if (!requiredPerm) return true;
     return (user.permissions ?? []).includes(requiredPerm);
   };
 
   const safeSetView = (v) => {
-    setView(userCan(v) ? v : 'dashboard');
+    setView(userCan(v) ? v : defaultViewFor(user));
   };
 
   // ── Derived data ─────────────────────────────────────────────────────────
@@ -386,7 +397,6 @@ const ClearSuite = () => {
     return <LoadingScreen />;
   }
 
-  const isSuperAdmin     = user?.role === 'superadmin';
   const isViewForbidden  = !userCan(view);
   const ccProps          = { db, setDb, logAction, user, setView: safeSetView };
 
@@ -420,7 +430,7 @@ const ClearSuite = () => {
 
           {/* ── Forbidden ───────────────────────────────────────────────── */}
           {isViewForbidden && (
-            <Forbidden key="forbidden" onBack={() => setView('dashboard')} />
+            <Forbidden key="forbidden" onBack={() => safeSetView(defaultViewFor(user))} />
           )}
 
           {/* ── Core Pages ──────────────────────────────────────────────── */}
@@ -430,13 +440,15 @@ const ClearSuite = () => {
           {!isViewForbidden && view === 'budget_history' && <BudgetHistory    key="bh" db={db} setDb={setDb} logAction={logAction} setView={safeSetView} />}
           {!isViewForbidden && view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
 
-          {/* ── Superadmin Only ─────────────────────────────────────────── */}
-          {!isViewForbidden && view === 'approvals'      && isSuperAdmin && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
-          {!isViewForbidden && view === 'budget_request' && isSuperAdmin && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
-          {!isViewForbidden && view === 'reports'        && isSuperAdmin && <Reports          key="r"  db={db} selectedMonth={month} />}
-          {!isViewForbidden && view === 'categories'     && isSuperAdmin && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
-          {!isViewForbidden && view === 'activity'       && isSuperAdmin && <ActivityLog      key="al" db={db} />}
-          {!isViewForbidden && view === 'manage_users'   && isSuperAdmin && <ManageUsers      key="mu" />}
+          {/* ── Permission-gated (formerly superadmin-only) ─────────────── */}
+          {!isViewForbidden && view === 'approvals'      && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
+          {!isViewForbidden && view === 'budget_request' && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
+          {!isViewForbidden && view === 'reports'        && <Reports          key="r"  db={db} selectedMonth={month} />}
+          {!isViewForbidden && view === 'categories'     && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
+          {!isViewForbidden && view === 'activity'       && <ActivityLog      key="al" db={db} />}
+
+          {/* ── Admin / Superadmin only ──────────────────────────────────── */}
+          {!isViewForbidden && view === 'manage_users'   && <ManageUsers      key="mu" />}
 
           {/* ── Call Center ─────────────────────────────────────────────── */}
           {!isViewForbidden && view === 'call_center'     && <CallCenterHub   key="cch" setView={safeSetView} />}

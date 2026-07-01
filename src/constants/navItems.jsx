@@ -10,11 +10,12 @@ import {
 // ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
 // roles: 'superadmin'  → only superadmin can see it (never assignable to users)
 // roles: 'all'         → every logged-in user sees it, gated by permKey (if present)
-// Dashboard has no permKey → always visible to everyone.
+// hideFor: ['role1']   → explicitly hidden for these role values, regardless of permKey
+// Dashboard has no permKey → always visible to everyone EXCEPT roles in hideFor.
 
 const NAVITEMS = [
   // ── Core ──────────────────────────────────────────────────────────────────
-  { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',       roles: 'all' },
+  { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',       roles: 'all', hideFor: ['call_center'] },
   { id: 'add_expense',    icon: <Plus          size={18} />, label: 'Log Transaction', roles: 'all', permKey: 'add_expense' },
   { id: 'approvals',      icon: <ShieldCheck   size={18} />, label: 'Authorizations',  roles: 'all', permKey: 'approvals', badge: true },
 

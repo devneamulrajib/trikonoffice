@@ -14,23 +14,16 @@ import {
 // Dashboard has no permKey → always visible to everyone EXCEPT roles in hideFor.
 
 const NAVITEMS = [
-  // ── Core ──────────────────────────────────────────────────────────────────
   { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',       roles: 'all', hideFor: ['call_center'] },
   { id: 'add_expense',    icon: <Plus          size={18} />, label: 'Log Transaction', roles: 'all', permKey: 'add_expense' },
   { id: 'approvals',      icon: <ShieldCheck   size={18} />, label: 'Authorizations',  roles: 'all', permKey: 'approvals', badge: true },
-
-  // ── Finance ───────────────────────────────────────────────────────────────
   { id: 'budget_request', icon: <Wallet        size={18} />, label: 'Phase Planning',  roles: 'all', permKey: 'budget_request' },
   { id: 'budget_history', icon: <ListFilter    size={18} />, label: 'History Ledger',  roles: 'all', permKey: 'budget_history' },
   { id: 'reports',        icon: <ClipboardList size={18} />, label: 'Audit Reports',   roles: 'all', permKey: 'reports' },
   { id: 'salary_advance', icon: <CreditCard    size={18} />, label: 'Pay Advance',     roles: 'all', permKey: 'salary_advance' },
-
-  // ── System ────────────────────────────────────────────────────────────────
   { id: 'categories',     icon: <Layers        size={18} />, label: 'Sectors',         roles: 'all', permKey: 'categories' },
   { id: 'activity',       icon: <History       size={18} />, label: 'Audit Trail',     roles: 'all', permKey: 'activity' },
   { id: 'settings',       icon: <SettingsIcon  size={18} />, label: 'Settings',        roles: 'all', permKey: 'settings' },
-
-  // ── Client Management ─────────────────────────────────────────────────────
   { type: 'divider', section: 'Client Management' },
   {
     type:    'group',

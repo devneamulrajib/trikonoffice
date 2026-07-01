@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LogOut, Search, Users, ChevronRight, Settings, LayoutDashboard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LogOut, Search, Users, ChevronRight, ChevronDown, Settings } from 'lucide-react';
 import NAVITEMS from '../constants/navItems';
 
 // ─── PERMISSION CHECK ──────────────────────────────────────────────────────────
@@ -13,7 +13,7 @@ const canSee = (item, user) => {
 };
 
 // ─── NAV BUTTON ───────────────────────────────────────────────────────────────
-const NavBtn = ({ item, view, setView, pendingCount }) => {
+const NavBtn = ({ item, view, setView, pendingCount, indented = false }) => {
   const isActive = view === item.id;
   return (
     <button
@@ -23,12 +23,12 @@ const NavBtn = ({ item, view, setView, pendingCount }) => {
         display:        'flex',
         alignItems:     'center',
         gap:            10,
-        padding:        '9px 12px',
+        padding:        indented ? '8px 12px 8px 36px' : '9px 12px',
         borderRadius:   8,
         border:         'none',
         cursor:         'pointer',
         textAlign:      'left',
-        fontSize:       14,
+        fontSize:       indented ? 13 : 14,
         fontWeight:     isActive ? 700 : 400,
         color:          isActive ? '#111111' : '#4B5563',
         background:     isActive ? '#F3F4F6' : 'transparent',
@@ -39,20 +39,15 @@ const NavBtn = ({ item, view, setView, pendingCount }) => {
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F9FAFB'; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* Icon */}
       <span style={{
-        display:        'flex',
-        alignItems:     'center',
-        color:          isActive ? '#111111' : '#9CA3AF',
-        flexShrink:     0,
+        display:    'flex',
+        alignItems: 'center',
+        color:      isActive ? '#111111' : '#9CA3AF',
+        flexShrink: 0,
       }}>
         {item.icon}
       </span>
-
-      {/* Label */}
       <span style={{ flex: 1 }}>{item.label}</span>
-
-      {/* Count badge */}
       {item.badge && pendingCount > 0 && (
         <span style={{
           background:   '#FEE2E2',
@@ -70,7 +65,7 @@ const NavBtn = ({ item, view, setView, pendingCount }) => {
   );
 };
 
-// ─── GROUP BUTTON (Clients, Call Center) ──────────────────────────────────────
+// ─── GROUP BUTTON (clients — navigates to hub) ────────────────────────────────
 const GroupBtn = ({ item, view, setView }) => {
   const isActive = view === item.id || item.children?.some(c => c.id === view);
   return (
@@ -102,6 +97,87 @@ const GroupBtn = ({ item, view, setView }) => {
       <span style={{ flex: 1 }}>{item.label}</span>
       <ChevronRight size={14} style={{ color: '#D1D5DB' }} />
     </button>
+  );
+};
+
+// ─── EXPANDABLE GROUP (My Center — expands inline) ────────────────────────────
+const ExpandableGroup = ({ item, view, setView, user }) => {
+  const hasActiveChild = item.children?.some(c => c.id === view);
+  const isGroupActive  = view === item.id || hasActiveChild;
+
+  const [open, setOpen] = useState(isGroupActive);
+
+  // Auto-open when a child is active (e.g. direct URL navigation)
+  useEffect(() => {
+    if (hasActiveChild) setOpen(true);
+  }, [hasActiveChild]);
+
+  const handleClick = () => {
+    const willOpen = !open;
+    setOpen(willOpen);
+    // When opening, navigate to the default child (New Call)
+    if (willOpen) {
+      const defaultId = item.defaultChild || item.children?.[0]?.id;
+      if (defaultId) setView(defaultId);
+    }
+  };
+
+  const visibleChildren = (item.children || []).filter(c => canSee(c, user));
+
+  return (
+    <div>
+      {/* Parent row */}
+      <button
+        onClick={handleClick}
+        style={{
+          width:          '100%',
+          display:        'flex',
+          alignItems:     'center',
+          gap:            10,
+          padding:        '9px 12px',
+          borderRadius:   8,
+          border:         'none',
+          cursor:         'pointer',
+          textAlign:      'left',
+          fontSize:       14,
+          fontWeight:     isGroupActive ? 700 : 400,
+          color:          isGroupActive ? '#111111' : '#4B5563',
+          background:     isGroupActive ? '#F3F4F6' : 'transparent',
+          marginBottom:   2,
+          transition:     'background 0.15s',
+        }}
+        onMouseEnter={e => { if (!isGroupActive) e.currentTarget.style.background = '#F9FAFB'; }}
+        onMouseLeave={e => { if (!isGroupActive) e.currentTarget.style.background = 'transparent'; }}
+      >
+        <span style={{ color: isGroupActive ? '#111111' : '#9CA3AF', flexShrink: 0 }}>
+          {item.icon}
+        </span>
+        <span style={{ flex: 1 }}>{item.label}</span>
+        {open
+          ? <ChevronDown size={14} style={{ color: '#9CA3AF' }} />
+          : <ChevronRight size={14} style={{ color: '#D1D5DB' }} />
+        }
+      </button>
+
+      {/* Sub-items */}
+      {open && visibleChildren.length > 0 && (
+        <div style={{
+          borderLeft:  '2px solid #F3F4F6',
+          marginLeft:  22,
+          marginBottom: 2,
+        }}>
+          {visibleChildren.map(child => (
+            <NavBtn
+              key={child.id}
+              item={child}
+              view={view}
+              setView={setView}
+              indented
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -140,11 +216,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
   const showClientMgmt =
     visibleGroupIds.has('clients') ||
     visibleIds.has('clients_manage') ||
-    visibleGroupIds.has('call_center') ||
-    visibleIds.has('cc_transfer') ||
-    visibleIds.has('cc_call_logs');
+    visibleGroupIds.has('call_center');
 
-  // Filter nav items by search
   const filter = (id) => {
     if (!search) return true;
     const item = NAVITEMS.find(i => i.id === id);
@@ -153,14 +226,14 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
   return (
     <aside style={{
-      width:     260,
-      position:  'fixed',
+      width:         260,
+      position:      'fixed',
       top: 0, left: 0, bottom: 0,
-      background: '#FFFFFF',
-      borderRight: '1px solid #F3F4F6',
-      display:   'flex',
+      background:    '#FFFFFF',
+      borderRight:   '1px solid #F3F4F6',
+      display:       'flex',
       flexDirection: 'column',
-      zIndex:    100,
+      zIndex:        100,
     }}>
 
       {/* ── MENU HEADER ──────────────────────────────────────────── */}
@@ -170,14 +243,9 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
         alignItems:     'center',
         justifyContent: 'space-between',
       }}>
-        <span style={{
-          fontSize:   20,
-          fontWeight: 700,
-          color:      '#111111',
-        }}>
+        <span style={{ fontSize: 20, fontWeight: 700, color: '#111111' }}>
           Menu
         </span>
-        {/* Hamburger icon */}
         <button style={{
           background: 'none', border: 'none',
           cursor: 'pointer', color: '#9CA3AF',
@@ -208,27 +276,24 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
-              border:     'none',
-              background: 'transparent',
-              outline:    'none',
-              fontSize:   13,
-              color:      '#374151',
-              width:      '100%',
+              border: 'none', background: 'transparent',
+              outline: 'none', fontSize: 13,
+              color: '#374151', width: '100%',
             }}
           />
         </div>
       </div>
 
-      {/* ── FISCAL MONTH (compact) ──────────────────────────────── */}
+      {/* ── FISCAL MONTH ─────────────────────────────────────────── */}
       <div style={{ padding: '0 16px 8px' }}>
         <div style={{
-          display:      'flex',
-          alignItems:   'center',
+          display:        'flex',
+          alignItems:     'center',
           justifyContent: 'space-between',
-          padding:      '8px 12px',
-          background:   '#FFFBEB',
-          border:       '1.5px solid #FDE68A',
-          borderRadius: 8,
+          padding:        '8px 12px',
+          background:     '#FFFBEB',
+          border:         '1.5px solid #FDE68A',
+          borderRadius:   8,
         }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
@@ -241,8 +306,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
               style={{
                 border: 'none', background: 'transparent',
                 color: '#111111', fontWeight: 700,
-                outline: 'none', fontSize: 13, cursor: 'pointer',
-                padding: 0,
+                outline: 'none', fontSize: 13, cursor: 'pointer', padding: 0,
               }}
             />
           </div>
@@ -252,7 +316,6 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
       {/* ── NAV LINKS ────────────────────────────────────────────── */}
       <nav style={{ flex: 1, padding: '0 12px', overflowY: 'auto' }}>
 
-        {/* TASKS group label */}
         {showCore && <SectionLabel>Tasks</SectionLabel>}
         {NAVITEMS
           .filter(i => ['dashboard', 'add_expense', 'approvals'].includes(i.id) && canSee(i, user) && filter(i.id))
@@ -279,12 +342,26 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
 
         {showClientMgmt && <SectionLabel>Client Management</SectionLabel>}
         {NAVITEMS
-          .filter(i => ['clients', 'clients_manage', 'call_center', 'cc_transfer', 'cc_call_logs'].includes(i.id) && canSee(i, user))
-          .map(item => (
-            item.type === 'group'
-              ? <GroupBtn key={item.id} item={item} view={view} setView={setView} />
-              : <NavBtn key={item.id} item={item} view={view} setView={setView} pendingCount={pendingCount} />
-          ))
+          .filter(i => ['clients', 'clients_manage', 'call_center'].includes(i.id) && canSee(i, user))
+          .map(item => {
+            if (item.type === 'group') {
+              // My Center → expands inline
+              if (item.id === 'call_center') {
+                return (
+                  <ExpandableGroup
+                    key={item.id}
+                    item={item}
+                    view={view}
+                    setView={setView}
+                    user={user}
+                  />
+                );
+              }
+              // Add Client → navigates to hub
+              return <GroupBtn key={item.id} item={item} view={view} setView={setView} />;
+            }
+            return <NavBtn key={item.id} item={item} view={view} setView={setView} pendingCount={pendingCount} />;
+          })
         }
 
         {user?.role === 'superadmin' && (
@@ -316,28 +393,15 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
         )}
       </nav>
 
-      {/* ── FOOTER: Settings + Sign out ───────────────────────────── */}
-      <div style={{
-        padding:   '16px 12px',
-        borderTop: '1px solid #F3F4F6',
-      }}>
-        {/* Settings shortcut */}
+      {/* ── FOOTER ───────────────────────────────────────────────── */}
+      <div style={{ padding: '16px 12px', borderTop: '1px solid #F3F4F6' }}>
         <button
           onClick={() => setView('settings')}
           style={{
-            width:        '100%',
-            display:      'flex',
-            alignItems:   'center',
-            gap:          10,
-            padding:      '9px 12px',
-            borderRadius: 8,
-            border:       'none',
-            cursor:       'pointer',
-            textAlign:    'left',
-            fontSize:     14,
-            color:        '#6B7280',
-            background:   'transparent',
-            marginBottom: 2,
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            textAlign: 'left', fontSize: 14, color: '#6B7280',
+            background: 'transparent', marginBottom: 2,
           }}
           onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -346,22 +410,12 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           <span>Settings</span>
         </button>
 
-        {/* Sign out */}
         <button
           onClick={onLogout}
           style={{
-            width:        '100%',
-            display:      'flex',
-            alignItems:   'center',
-            gap:          10,
-            padding:      '9px 12px',
-            borderRadius: 8,
-            border:       'none',
-            cursor:       'pointer',
-            textAlign:    'left',
-            fontSize:     14,
-            color:        '#6B7280',
-            background:   'transparent',
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            textAlign: 'left', fontSize: 14, color: '#6B7280', background: 'transparent',
           }}
           onMouseEnter={e => e.currentTarget.style.background = '#FFF1F2'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -370,38 +424,23 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           <span>Sign out</span>
         </button>
 
-        {/* User chip */}
         <div style={{
-          display:      'flex',
-          alignItems:   'center',
-          gap:          10,
-          padding:      '10px 12px 2px',
-          marginTop:    8,
-          borderTop:    '1px solid #F3F4F6',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 12px 2px', marginTop: 8,
+          borderTop: '1px solid #F3F4F6',
         }}>
           <div style={{
-            width:          32,
-            height:         32,
-            borderRadius:   '50%',
-            background:     '#F9A825',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
-            fontWeight:     800,
-            color:          '#111111',
-            fontSize:       13,
-            flexShrink:     0,
+            width: 32, height: 32, borderRadius: '50%',
+            background: '#F9A825', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            fontWeight: 800, color: '#111111', fontSize: 13, flexShrink: 0,
           }}>
             {(user?.name || user?.firstName || 'U')[0].toUpperCase()}
           </div>
           <div style={{ overflow: 'hidden' }}>
             <div style={{
-              fontSize:      13,
-              fontWeight:    600,
-              color:         '#111111',
-              whiteSpace:    'nowrap',
-              textOverflow:  'ellipsis',
-              overflow:      'hidden',
+              fontSize: 13, fontWeight: 600, color: '#111111',
+              whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden',
             }}>
               {user?.name || user?.firstName || 'User'}
             </div>

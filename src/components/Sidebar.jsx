@@ -19,22 +19,22 @@ const NavBtn = ({ item, view, setView, pendingCount, indented = false }) => {
     <button
       onClick={() => setView(item.id)}
       style={{
-        width:          '100%',
-        display:        'flex',
-        alignItems:     'center',
-        gap:            10,
-        padding:        indented ? '8px 12px 8px 36px' : '9px 12px',
-        borderRadius:   8,
-        border:         'none',
-        cursor:         'pointer',
-        textAlign:      'left',
-        fontSize:       indented ? 13 : 14,
-        fontWeight:     isActive ? 700 : 400,
-        color:          isActive ? '#111111' : '#4B5563',
-        background:     isActive ? '#F3F4F6' : 'transparent',
-        marginBottom:   2,
-        transition:     'background 0.15s, color 0.15s',
-        position:       'relative',
+        width:        '100%',
+        display:      'flex',
+        alignItems:   'center',
+        gap:          10,
+        padding:      indented ? '8px 12px 8px 36px' : '9px 12px',
+        borderRadius: 8,
+        border:       'none',
+        cursor:       'pointer',
+        textAlign:    'left',
+        fontSize:     indented ? 13 : 14,
+        fontWeight:   isActive ? 700 : 400,
+        color:        isActive ? '#111111' : '#4B5563',
+        background:   isActive ? '#F3F4F6' : 'transparent',
+        marginBottom: 2,
+        transition:   'background 0.15s, color 0.15s',
+        position:     'relative',
       }}
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F9FAFB'; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
@@ -65,28 +65,28 @@ const NavBtn = ({ item, view, setView, pendingCount, indented = false }) => {
   );
 };
 
-// ─── GROUP BUTTON (clients — navigates to hub) ────────────────────────────────
+// ─── GROUP BUTTON (clients — navigates to hub page) ───────────────────────────
 const GroupBtn = ({ item, view, setView }) => {
   const isActive = view === item.id || item.children?.some(c => c.id === view);
   return (
     <button
       onClick={() => setView(item.id)}
       style={{
-        width:          '100%',
-        display:        'flex',
-        alignItems:     'center',
-        gap:            10,
-        padding:        '9px 12px',
-        borderRadius:   8,
-        border:         'none',
-        cursor:         'pointer',
-        textAlign:      'left',
-        fontSize:       14,
-        fontWeight:     isActive ? 700 : 400,
-        color:          isActive ? '#111111' : '#4B5563',
-        background:     isActive ? '#F3F4F6' : 'transparent',
-        marginBottom:   2,
-        transition:     'background 0.15s',
+        width:        '100%',
+        display:      'flex',
+        alignItems:   'center',
+        gap:          10,
+        padding:      '9px 12px',
+        borderRadius: 8,
+        border:       'none',
+        cursor:       'pointer',
+        textAlign:    'left',
+        fontSize:     14,
+        fontWeight:   isActive ? 700 : 400,
+        color:        isActive ? '#111111' : '#4B5563',
+        background:   isActive ? '#F3F4F6' : 'transparent',
+        marginBottom: 2,
+        transition:   'background 0.15s',
       }}
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F9FAFB'; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
@@ -100,14 +100,14 @@ const GroupBtn = ({ item, view, setView }) => {
   );
 };
 
-// ─── EXPANDABLE GROUP (My Center — expands inline) ────────────────────────────
+// ─── EXPANDABLE GROUP (My Center — expands sub-items inline in sidebar) ───────
 const ExpandableGroup = ({ item, view, setView, user }) => {
   const hasActiveChild = item.children?.some(c => c.id === view);
   const isGroupActive  = view === item.id || hasActiveChild;
 
   const [open, setOpen] = useState(isGroupActive);
 
-  // Auto-open when a child is active (e.g. direct URL navigation)
+  // Auto-open when a child route is active (e.g. direct navigation)
   useEffect(() => {
     if (hasActiveChild) setOpen(true);
   }, [hasActiveChild]);
@@ -115,8 +115,8 @@ const ExpandableGroup = ({ item, view, setView, user }) => {
   const handleClick = () => {
     const willOpen = !open;
     setOpen(willOpen);
-    // When opening, navigate to the default child (New Call)
     if (willOpen) {
+      // Navigate to the default child on expand
       const defaultId = item.defaultChild || item.children?.[0]?.id;
       if (defaultId) setView(defaultId);
     }
@@ -126,25 +126,25 @@ const ExpandableGroup = ({ item, view, setView, user }) => {
 
   return (
     <div>
-      {/* Parent row */}
+      {/* My Center row */}
       <button
         onClick={handleClick}
         style={{
-          width:          '100%',
-          display:        'flex',
-          alignItems:     'center',
-          gap:            10,
-          padding:        '9px 12px',
-          borderRadius:   8,
-          border:         'none',
-          cursor:         'pointer',
-          textAlign:      'left',
-          fontSize:       14,
-          fontWeight:     isGroupActive ? 700 : 400,
-          color:          isGroupActive ? '#111111' : '#4B5563',
-          background:     isGroupActive ? '#F3F4F6' : 'transparent',
-          marginBottom:   2,
-          transition:     'background 0.15s',
+          width:        '100%',
+          display:      'flex',
+          alignItems:   'center',
+          gap:          10,
+          padding:      '9px 12px',
+          borderRadius: 8,
+          border:       'none',
+          cursor:       'pointer',
+          textAlign:    'left',
+          fontSize:     14,
+          fontWeight:   isGroupActive ? 700 : 400,
+          color:        isGroupActive ? '#111111' : '#4B5563',
+          background:   isGroupActive ? '#F3F4F6' : 'transparent',
+          marginBottom: 2,
+          transition:   'background 0.15s',
         }}
         onMouseEnter={e => { if (!isGroupActive) e.currentTarget.style.background = '#F9FAFB'; }}
         onMouseLeave={e => { if (!isGroupActive) e.currentTarget.style.background = 'transparent'; }}
@@ -154,7 +154,7 @@ const ExpandableGroup = ({ item, view, setView, user }) => {
         </span>
         <span style={{ flex: 1 }}>{item.label}</span>
         {open
-          ? <ChevronDown size={14} style={{ color: '#9CA3AF' }} />
+          ? <ChevronDown  size={14} style={{ color: '#9CA3AF' }} />
           : <ChevronRight size={14} style={{ color: '#D1D5DB' }} />
         }
       </button>
@@ -162,8 +162,8 @@ const ExpandableGroup = ({ item, view, setView, user }) => {
       {/* Sub-items */}
       {open && visibleChildren.length > 0 && (
         <div style={{
-          borderLeft:  '2px solid #F3F4F6',
-          marginLeft:  22,
+          borderLeft:   '2px solid #F3F4F6',
+          marginLeft:   22,
           marginBottom: 2,
         }}>
           {visibleChildren.map(child => (
@@ -216,7 +216,9 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
   const showClientMgmt =
     visibleGroupIds.has('clients') ||
     visibleIds.has('clients_manage') ||
-    visibleGroupIds.has('call_center');
+    visibleGroupIds.has('call_center') ||
+    visibleIds.has('cc_transfer') ||
+    visibleIds.has('cc_call_logs');
 
   const filter = (id) => {
     if (!search) return true;
@@ -247,10 +249,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           Menu
         </span>
         <button style={{
-          background: 'none', border: 'none',
-          cursor: 'pointer', color: '#9CA3AF',
-          display: 'flex', flexDirection: 'column', gap: 4,
-          padding: 4,
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', gap: 4, padding: 4,
         }}>
           <div style={{ width: 18, height: 2, background: '#6B7280', borderRadius: 2 }} />
           <div style={{ width: 14, height: 2, background: '#6B7280', borderRadius: 2 }} />
@@ -277,8 +277,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
             onChange={e => setSearch(e.target.value)}
             style={{
               border: 'none', background: 'transparent',
-              outline: 'none', fontSize: 13,
-              color: '#374151', width: '100%',
+              outline: 'none', fontSize: 13, color: '#374151', width: '100%',
             }}
           />
         </div>
@@ -340,12 +339,13 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
           ))
         }
 
+        {/* ── CLIENT MANAGEMENT ─────────────────────────────────── */}
         {showClientMgmt && <SectionLabel>Client Management</SectionLabel>}
         {NAVITEMS
-          .filter(i => ['clients', 'clients_manage', 'call_center'].includes(i.id) && canSee(i, user))
+          .filter(i => ['clients', 'clients_manage', 'call_center', 'cc_transfer', 'cc_call_logs'].includes(i.id) && canSee(i, user))
           .map(item => {
             if (item.type === 'group') {
-              // My Center → expands inline
+              // My Center → expands inline with sub-items
               if (item.id === 'call_center') {
                 return (
                   <ExpandableGroup
@@ -357,13 +357,17 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
                   />
                 );
               }
-              // Add Client → navigates to hub
+              // Add Client → navigates to hub as before
               return <GroupBtn key={item.id} item={item} view={view} setView={setView} />;
             }
-            return <NavBtn key={item.id} item={item} view={view} setView={setView} pendingCount={pendingCount} />;
+            // cc_transfer, cc_call_logs, clients_manage → plain nav buttons
+            return (
+              <NavBtn key={item.id} item={item} view={view} setView={setView} pendingCount={pendingCount} />
+            );
           })
         }
 
+        {/* ── ADMIN ─────────────────────────────────────────────── */}
         {user?.role === 'superadmin' && (
           <>
             <SectionLabel>Admin</SectionLabel>
@@ -393,7 +397,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
         )}
       </nav>
 
-      {/* ── FOOTER ───────────────────────────────────────────────── */}
+      {/* ── FOOTER: Settings + Sign out ───────────────────────────── */}
       <div style={{ padding: '16px 12px', borderTop: '1px solid #F3F4F6' }}>
         <button
           onClick={() => setView('settings')}

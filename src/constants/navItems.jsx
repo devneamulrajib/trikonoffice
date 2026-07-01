@@ -3,8 +3,8 @@ import {
   Layout, Plus, Wallet, ListFilter, ClipboardList,
   CreditCard, Layers, History, ShieldCheck,
   Settings as SettingsIcon,
-  Headphones, Phone, PhoneCall,
-  Users, Table2, Upload, UserPlus
+  Headphones, Phone, PhoneCall, ArrowLeftRight,
+  MessageSquare, FileText, BookOpen, Users, Table2, Upload, UserPlus
 } from 'lucide-react';
 
 // ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ const NAVITEMS = [
       { id: 'clients_import', icon: <Upload size={16} />,   label: 'Import',     roles: 'superadmin' },
     ],
   },
-  // Standalone — sits between the "Add Client" group and "My Center" group
+  // Standalone top-level item — sits between the "Add Client" group and "My Center" group
   { id: 'clients_manage', icon: <Table2 size={18} />, label: 'All Clients', roles: 'all', permKey: 'clients_manage' },
   {
     type:    'group',
@@ -58,10 +58,14 @@ const NAVITEMS = [
     permKey: 'call_center',
     defaultChild: 'cc_new_call',
     children: [
-      { id: 'cc_new_call',  icon: <Phone     size={16} />, label: 'New Call',  roles: 'all', permKey: 'cc_new_call'  },
-      { id: 'cc_follow_up', icon: <PhoneCall size={16} />, label: 'Follow Up', roles: 'all', permKey: 'cc_follow_up' },
+      { id: 'cc_new_call',     icon: <Phone          size={16} />, label: 'New Call',     roles: 'all', permKey: 'cc_new_call'     },
+      { id: 'cc_follow_up',    icon: <PhoneCall      size={16} />, label: 'Follow Up',    roles: 'all', permKey: 'cc_follow_up'    },
+      { id: 'cc_comments',     icon: <MessageSquare  size={16} />, label: 'Comments',     roles: 'all', permKey: 'cc_comments'     },
+      { id: 'cc_requirements', icon: <FileText       size={16} />, label: 'Requirements', roles: 'all', permKey: 'cc_requirements' },
     ],
   },
+  { id: 'cc_transfer',  icon: <ArrowLeftRight size={18} />, label: 'Client Transfer Request', roles: 'all', permKey: 'cc_transfer'  },
+  { id: 'cc_call_logs', icon: <BookOpen       size={18} />, label: 'Call Logs',               roles: 'all', permKey: 'cc_call_logs' },
 ];
 
 export default NAVITEMS;

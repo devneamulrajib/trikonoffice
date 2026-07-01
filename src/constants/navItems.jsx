@@ -8,30 +8,26 @@ import {
 } from 'lucide-react';
 
 // ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
-// Each nav item has:
-//   roles: 'superadmin'  → only superadmin can see it (never assignable to users)
-//   roles: 'all'         → every logged-in user sees it (dashboard is always visible)
-//   permKey: 'xyz'       → regular users only see it if 'xyz' is in their permissions array
-//
-// Dashboard has roles: 'all' and no permKey → always visible to everyone.
-// All other 'all' items need a permKey so they can be hidden when not granted.
+// roles: 'superadmin'  → only superadmin can see it (never assignable to users)
+// roles: 'all'         → every logged-in user sees it, gated by permKey (if present)
+// Dashboard has no permKey → always visible to everyone.
 
 const NAVITEMS = [
   // ── Core ──────────────────────────────────────────────────────────────────
-  { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',      roles: 'all'                                   },
-  { id: 'add_expense',    icon: <Plus          size={18} />, label: 'Log Transaction', roles: 'all',        permKey: 'add_expense'    },
-  { id: 'approvals',      icon: <ShieldCheck   size={18} />, label: 'Authorizations',  roles: 'superadmin', badge: true               },
+  { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',       roles: 'all' },
+  { id: 'add_expense',    icon: <Plus          size={18} />, label: 'Log Transaction', roles: 'all', permKey: 'add_expense' },
+  { id: 'approvals',      icon: <ShieldCheck   size={18} />, label: 'Authorizations',  roles: 'all', permKey: 'approvals', badge: true },
 
   // ── Finance ───────────────────────────────────────────────────────────────
-  { id: 'budget_request', icon: <Wallet        size={18} />, label: 'Phase Planning',  roles: 'superadmin'                            },
-  { id: 'budget_history', icon: <ListFilter    size={18} />, label: 'History Ledger',  roles: 'all',        permKey: 'budget_history' },
-  { id: 'reports',        icon: <ClipboardList size={18} />, label: 'Audit Reports',   roles: 'superadmin'                            },
-  { id: 'salary_advance', icon: <CreditCard    size={18} />, label: 'Pay Advance',     roles: 'all',        permKey: 'salary_advance' },
+  { id: 'budget_request', icon: <Wallet        size={18} />, label: 'Phase Planning',  roles: 'all', permKey: 'budget_request' },
+  { id: 'budget_history', icon: <ListFilter    size={18} />, label: 'History Ledger',  roles: 'all', permKey: 'budget_history' },
+  { id: 'reports',        icon: <ClipboardList size={18} />, label: 'Audit Reports',   roles: 'all', permKey: 'reports' },
+  { id: 'salary_advance', icon: <CreditCard    size={18} />, label: 'Pay Advance',     roles: 'all', permKey: 'salary_advance' },
 
   // ── System ────────────────────────────────────────────────────────────────
-  { id: 'categories',     icon: <Layers        size={18} />, label: 'Sectors',         roles: 'superadmin'                            },
-  { id: 'activity',       icon: <History       size={18} />, label: 'Audit Trail',     roles: 'superadmin'                            },
-  { id: 'settings',       icon: <SettingsIcon  size={18} />, label: 'Settings',        roles: 'all',        permKey: 'settings'       },
+  { id: 'categories',     icon: <Layers        size={18} />, label: 'Sectors',         roles: 'all', permKey: 'categories' },
+  { id: 'activity',       icon: <History       size={18} />, label: 'Audit Trail',     roles: 'all', permKey: 'activity' },
+  { id: 'settings',       icon: <SettingsIcon  size={18} />, label: 'Settings',        roles: 'all', permKey: 'settings' },
 
   // ── Client Management ─────────────────────────────────────────────────────
   { type: 'divider', section: 'Client Management' },
@@ -43,11 +39,10 @@ const NAVITEMS = [
     roles:   'all',
     permKey: 'clients',
     children: [
-      { id: 'clients_add',    icon: <UserPlus size={16} />, label: 'Add Client', roles: 'superadmin' },
-      { id: 'clients_import', icon: <Upload size={16} />,   label: 'Import',     roles: 'superadmin' },
+      { id: 'clients_add',    icon: <UserPlus size={16} />, label: 'Add Client', roles: 'all', permKey: 'clients_add' },
+      { id: 'clients_import', icon: <Upload size={16} />,   label: 'Import',     roles: 'all', permKey: 'clients_import' },
     ],
   },
-  // Standalone top-level item — sits between the "Add Client" group and "My Center" group
   { id: 'clients_manage', icon: <Table2 size={18} />, label: 'All Clients', roles: 'all', permKey: 'clients_manage' },
   {
     type:    'group',

@@ -220,6 +220,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
     visibleIds.has('cc_transfer') ||
     visibleIds.has('cc_call_logs');
 
+  const canManageUsers = user?.role === 'superadmin' || user?.role === 'admin';
+
   const filter = (id) => {
     if (!search) return true;
     const item = NAVITEMS.find(i => i.id === id);
@@ -368,7 +370,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
         }
 
         {/* ── ADMIN ─────────────────────────────────────────────── */}
-        {user?.role === 'superadmin' && (
+        {canManageUsers && (
           <>
             <SectionLabel>Admin</SectionLabel>
             <button
@@ -449,7 +451,7 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount 
               {user?.name || user?.firstName || 'User'}
             </div>
             <div style={{ fontSize: 11, color: '#9CA3AF' }}>
-              {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+              {user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
             </div>
           </div>
         </div>

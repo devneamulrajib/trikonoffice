@@ -6,32 +6,47 @@ import {
 } from 'lucide-react';
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
+// Keys here MUST match the `permKey` values in src/constants/navItems.jsx
+// or the sidebar will never show the item even after granting it here.
 const ALL_SECTIONS = [
-  { key: 'add_expense',     label: 'Log Transaction',  group: 'Finance'           },
-  { key: 'budget_history',  label: 'History Ledger',   group: 'Finance'           },
-  { key: 'salary_advance',  label: 'Pay Advance',      group: 'Finance'           },
-  { key: 'settings',        label: 'Settings',         group: 'System'            },
-  { key: 'call_center',     label: 'Call Center',      group: 'Call Center'       },
-  { key: 'cc_new_call',     label: 'New Call',         group: 'Call Center'       },
-  { key: 'cc_follow_up',    label: 'Follow Up',        group: 'Call Center'       },
-  { key: 'cc_transfer',     label: 'Transfer Request', group: 'Call Center'       },
-  { key: 'cc_comments',     label: 'Comments',         group: 'Call Center'       },
-  { key: 'cc_call_logs',    label: 'Call Logs',        group: 'Call Center'       },
-  { key: 'cc_requirements', label: 'Requirements',     group: 'Call Center'       },
-  { key: 'clients',         label: 'Clients (View)',   group: 'Client Management' },
-  { key: 'clients_manage',  label: 'Manage Clients',   group: 'Client Management' },
-  { key: 'clients_import',  label: 'Import Clients',   group: 'Client Management' },
+  // Admin & HR
+  { key: 'add_expense',     label: 'Log Transaction', group: 'Admin & HR' },
+  { key: 'approvals',       label: 'Authorizations',  group: 'Admin & HR' },
+  { key: 'budget_request',  label: 'Phase Planning',  group: 'Admin & HR' },
+  { key: 'budget_history',  label: 'History Ledger',  group: 'Admin & HR' },
+  { key: 'reports',         label: 'Audit Reports',   group: 'Admin & HR' },
+  { key: 'salary_advance',  label: 'Pay Advance',     group: 'Admin & HR' },
+  { key: 'categories',      label: 'Sectors',         group: 'Admin & HR' },
+  { key: 'activity',        label: 'Audit Trail',     group: 'Admin & HR' },
+  { key: 'settings',        label: 'Settings',        group: 'Admin & HR' },
+
+  // Call Center
+  { key: 'clients',         label: 'Add Client',              group: 'Call Center' },
+  { key: 'clients_add',     label: 'Add Client (form)',       group: 'Call Center' },
+  { key: 'clients_import',  label: 'Import Clients',          group: 'Call Center' },
+  { key: 'clients_manage',  label: 'All Clients',             group: 'Call Center' },
+  { key: 'call_center',     label: 'My Center',               group: 'Call Center' },
+  { key: 'cc_new_call',     label: 'New Call',                group: 'Call Center' },
+  { key: 'cc_follow_up',    label: 'Follow Up',               group: 'Call Center' },
+  { key: 'cc_transfer',     label: 'Client Transfer Request', group: 'Call Center' },
+  { key: 'cc_call_logs',    label: 'Call Logs',               group: 'Call Center' },
 ];
 
 const GROUPS = [...new Set(ALL_SECTIONS.map(s => s.group))];
 const DEFAULT_PERMISSIONS = ALL_SECTIONS.map(s => s.key);
 
+// ─── ROLE OPTIONS ─────────────────────────────────────────────────────────────
+// 'superadmin' is intentionally not selectable here — it should only be set
+// directly in the database to avoid accidentally minting new superadmins.
+const ROLE_OPTIONS = [
+  { value: 'user',  label: 'Regular (HR / Call Center)' },
+  { value: 'admin', label: 'Admin (can manage users)' },
+];
+
 // ─── GROUP COLOR MAP ──────────────────────────────────────────────────────────
 const GROUP_COLORS = {
-  'Finance':           { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
-  'System':            { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
-  'Call Center':       { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
-  'Client Management': { bg: '#FDF4FF', text: '#7E22CE', border: '#E9D5FF' },
+  'Admin & HR':  { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  'Call Center': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
 };
 
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
@@ -48,6 +63,12 @@ const formatSince = (d) => {
   if (!d) return null;
   const dt = new Date(d);
   return isNaN(dt) ? null : dt.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+};
+
+const roleLabel = (role) => {
+  if (role === 'superadmin') return 'Super Admin';
+  if (role === 'admin') return 'Admin';
+  return 'User';
 };
 
 // ─── BACKGROUND DRAWING ───────────────────────────────────────────────────────
@@ -135,7 +156,7 @@ const StatCard = ({ icon, label, value, accent }) => (
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 const ManageUsers = () => {
   const [users,      setUsers]      = useState([]);
-  const [form,       setForm]       = useState({ name: '', email: '', password: '' });
+  const [form,       setForm]       = useState({ name: '', email: '', password: '', role: 'user' });
   const [permissions,setPerms]      = useState(DEFAULT_PERMISSIONS);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
@@ -166,7 +187,7 @@ const ManageUsers = () => {
   };
 
   const resetForm = () => {
-    setForm({ name: '', email: '', password: '' });
+    setForm({ name: '', email: '', password: '', role: 'user' });
     setPerms(DEFAULT_PERMISSIONS);
     setError(''); setSuccess('');
   };
@@ -283,7 +304,7 @@ const ManageUsers = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
               <div>
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', margin: 0 }}>New User</h2>
-                <p style={{ fontSize: 13, color: '#6B7280', margin: '4px 0 0' }}>Fill in details, then assign permissions below</p>
+                <p style={{ fontSize: 13, color: '#6B7280', margin: '4px 0 0' }}>Fill in details, then assign role and permissions below</p>
               </div>
               <button onClick={handleTogglePanel} style={{
                 background: 'rgba(255,255,255,0.08)', border: 'none', color: '#FFFFFF',
@@ -299,7 +320,7 @@ const ManageUsers = () => {
 
             <form onSubmit={handleCreate}>
               {/* Fields row */}
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 28 }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
                 {[
                   { label: 'Full Name', key: 'name', type: 'text', placeholder: 'e.g. Jane Smith' },
                   { label: 'Email',     key: 'email', type: 'email', placeholder: 'jane@work.com' },
@@ -345,6 +366,34 @@ const ManageUsers = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Role selector */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6B7280', marginBottom: 7 }}>
+                  Role
+                </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {ROLE_OPTIONS.map(r => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, role: r.value })}
+                      style={{
+                        padding: '9px 16px', borderRadius: 9, fontSize: 13, fontWeight: 700,
+                        border: `1.5px solid ${form.role === r.value ? '#F9A825' : 'rgba(255,255,255,0.15)'}`,
+                        background: form.role === r.value ? '#F9A825' : 'transparent',
+                        color: form.role === r.value ? '#111111' : '#9CA3AF',
+                        cursor: 'pointer', transition: 'all 0.14s',
+                      }}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 11, color: '#6B7280', margin: '8px 0 0' }}>
+                  Admin can access "Manage Users" in addition to whatever is granted below. Super Admin can only be set from the database.
+                </p>
               </div>
 
               {/* Permissions */}
@@ -496,8 +545,20 @@ const ManageUsers = () => {
 
                     {/* Name + email */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#111111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {u.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#111111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {u.name}
+                        </div>
+                        {u.role && u.role !== 'user' && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em',
+                            padding: '2px 8px', borderRadius: 20, flexShrink: 0,
+                            background: u.role === 'superadmin' ? '#111111' : '#EDE9FE',
+                            color: u.role === 'superadmin' ? '#F9A825' : '#6D28D9',
+                          }}>
+                            {roleLabel(u.role)}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {u.email}

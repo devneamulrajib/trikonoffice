@@ -6,6 +6,7 @@ import {
   Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
   ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, XCircle,
+  ShieldCheck, Lock,
 } from 'lucide-react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -99,6 +100,13 @@ const emptyClient = () => ({
   source:'Referral', propertyType:'Apartment', budgetMin:'', budgetMax:'',
   location:'', address:'', reqLand:'', reqFlat:'', reqFacing:'', notes:'',
   calledAt: null, createdAt: new Date().toISOString(),
+  // ── Ownership fields ────────────────────────────────────────────────────
+  // Set on import/add. Stays null until an agent hits "Take call" — at that
+  // point the client is attached to that agent and hidden from everyone
+  // else's queue (Super Admin always sees everything).
+  assignedAgentId: null,
+  assignedAgentName: null,
+  assignedAt: null,
 });
 
 const AVATAR_PALETTE = [
@@ -204,22 +212,23 @@ const GhostBtn = ({ children, onClick, style }) => (
   </button>
 );
 
-const IconAction = ({ icon: Icon, onClick, title, variant='default' }) => {
+const IconAction = ({ icon: Icon, onClick, title, variant='default', disabled }) => {
   const variants = {
     default: { bg:'#F1F5F9', color:'#475569' },
     danger:  { bg:'#FEF2F2', color:C.red },
     primary: { bg:`linear-gradient(135deg,${C.accentDark},${C.accent})`, color:'#fff' },
+    muted:   { bg:'#F1F5F9', color:'#CBD5E1' },
   };
-  const v = variants[variant];
+  const v = variants[disabled ? 'muted' : variant];
   return (
-    <button onClick={onClick} title={title} style={{
+    <button onClick={disabled?undefined:onClick} title={title} disabled={disabled} style={{
       width:32, height:32, borderRadius:C.r.sm, border:'none', flexShrink:0,
-      background:v.bg, color:v.color, cursor:'pointer',
+      background:v.bg, color:v.color, cursor:disabled?'not-allowed':'pointer',
       display:'inline-flex', alignItems:'center', justifyContent:'center',
-      boxShadow: variant==='primary' ? `0 2px 8px ${C.accent}44` : 'none',
+      boxShadow: (variant==='primary' && !disabled) ? `0 2px 8px ${C.accent}44` : 'none',
       transition:'opacity .12s,transform .1s',
     }}
-      onMouseEnter={e=>{ e.currentTarget.style.opacity='.8'; e.currentTarget.style.transform='scale(1.07)'; }}
+      onMouseEnter={e=>{ if(!disabled){ e.currentTarget.style.opacity='.8'; e.currentTarget.style.transform='scale(1.07)'; } }}
       onMouseLeave={e=>{ e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='scale(1)'; }}
     >
       <Icon size={14}/>
@@ -875,36 +884,55 @@ const NewCall = ({ db, setDb, logAction, user }) => {
   const callLogs   = db?.callLogs  || [];
   const followUps  = db?.followUps || [];
 
-  // Queue = not yet called
-  const queue = useMemo(() => allClients.filter(c => !c.calledAt), [allClients]);
+  // ── Ownership / visibility scoping ─────────────────────────────────────────
+  const isSuperAdmin = user?.role === 'superadmin';
+  const myAgentId     = user?.id;
+  const myAgentName   = user?.name || 'Agent';
+  const isUnassigned  = c => c.assignedAgentId === null || c.assignedAgentId === undefined;
+  const isMine        = c => c.assignedAgentId === myAgentId;
+
+  // Clients this user is allowed to see at all. Super Admin sees everyone's.
+  // Everyone else sees unclaimed clients (so they can take them) plus their
+  // own already-claimed clients — never another agent's.
+  const visibleClients = useMemo(() => {
+    if (isSuperAdmin) return allClients;
+    return allClients.filter(c => isUnassigned(c) || isMine(c));
+  }, [allClients, isSuperAdmin, myAgentId]);
+
+  // Queue = not yet called, scoped to what this user can see
+  const queue = useMemo(() => visibleClients.filter(c => !c.calledAt), [visibleClients]);
+
+  // "My book" — clients actually attached to this agent (used for the
+  // Closed / Dropped tallies so each agent's numbers reflect only clients
+  // they personally took, not the whole shared pool).
+  const myClients = useMemo(() => {
+    if (isSuperAdmin) return allClients;
+    return allClients.filter(isMine);
+  }, [allClients, isSuperAdmin, myAgentId]);
+
+  const myCallLogs  = useMemo(() => isSuperAdmin ? callLogs  : callLogs.filter(l => l.agentId === myAgentId),  [callLogs, isSuperAdmin, myAgentId]);
+  const myFollowUps = useMemo(() => isSuperAdmin ? followUps : followUps.filter(f => f.agentId === myAgentId), [followUps, isSuperAdmin, myAgentId]);
 
   // ── Dashboard metrics ──────────────────────────────────────────────────────
   const metrics = useMemo(() => {
-    const calledClients = allClients.filter(c => c.calledAt);
+    // Calls logged (scoped to this agent, or everyone for Super Admin)
+    const callsLogged = myCallLogs.length;
 
-    // Calls logged (all call log entries)
-    const callsLogged = callLogs.length;
+    // Follow-ups sent/scheduled (scoped)
+    const followupsSent = myFollowUps.length;
 
-    // Follow-ups sent/scheduled
-    const followupsSent = followUps.length;
+    // Closed leads: clients with status 'Closed' from this agent's own book
+    const closedLeads = myClients.filter(c => c.status === 'Closed').length;
 
-    // Closed leads: clients with status 'Closed' (regardless of calledAt)
-    const closedLeads = allClients.filter(c => c.status === 'Closed').length;
+    // Dropped / Lost — same scoping
+    const droppedLeads = myClients.filter(c => c.status === 'Lost').length;
 
-    // Dropped / Lost
-    const droppedLeads = allClients.filter(c => c.status === 'Lost').length;
-
-    // Conversion rate: closed / called (with 0 guard)
-    const convRate = calledClients.length > 0
-      ? Math.round((closedLeads / allClients.length) * 100)
-      : 0;
-
-    // By source — count in queue (uncalled)
+    // By source — count in the visible queue (uncalled)
     const bySource = {};
     queue.forEach(c => { const s = c.source || 'Other'; bySource[s] = (bySource[s]||0)+1; });
 
-    return { total: queue.length, callsLogged, followupsSent, closedLeads, droppedLeads, convRate, bySource };
-  }, [allClients, queue, callLogs, followUps]);
+    return { total: queue.length, callsLogged, followupsSent, closedLeads, droppedLeads, bySource };
+  }, [queue, myClients, myCallLogs, myFollowUps]);
 
   // ── Filtered table list ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -929,6 +957,29 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     followupDate:'', followupType:'Regular',
     followupNote:'', callStatus:'',
   });
+
+  // Clicking "Take call": if the client is still unclaimed, attach it to
+  // this agent right away (this is the moment ownership is created). If
+  // it's already theirs (they opened it before and closed without logging),
+  // just reopen — no need to reassign.
+  const takeClient = lead => {
+    if (isUnassigned(lead)) {
+      const assignedAt = new Date().toISOString();
+      setDb(prev => ({
+        ...prev,
+        clients: (prev.clients||[]).map(c =>
+          c.id === lead.id
+            ? { ...c, assignedAgentId: myAgentId, assignedAgentName: myAgentName, assignedAt }
+            : c
+        ),
+      }));
+      logAction?.('Took client', 'Client', lead.name);
+      openTakeCall({ ...lead, assignedAgentId: myAgentId, assignedAgentName: myAgentName, assignedAt });
+    } else {
+      openTakeCall(lead);
+    }
+  };
+
   const updateActive = (k, v) => setActiveLead(p => ({...p,[k]:v}));
 
   const followupPriorityMap = { Priority:'high', 'Site Visit':'medium', Regular:'low' };
@@ -946,7 +997,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
       email:activeLead.email||'',
       subject:`${activeLead.propertyType||''} — Lead follow-up`.trim(),
       priority:'medium', notes:activeLead.coComment||'',
-      agent:user?.firstName||'Unknown', type:'inbound', duration:0,
+      agent: myAgentName, agentId: myAgentId, type:'inbound', duration:0,
       date:new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}),
       timestamp:now, propertyType:activeLead.propertyType, source:activeLead.source,
       callStatus:activeLead.callStatus, callOutcome:activeLead.coStatus,
@@ -967,7 +1018,14 @@ const NewCall = ({ db, setDb, logAction, user }) => {
         callLogs:[entry,...(prev.callLogs||[])],
         clients:(prev.clients||[]).map(c =>
           c.id===activeLead.id
-            ? {...c, calledAt:now, status: nextClientStatus || c.status}
+            ? {
+                ...c, calledAt:now, status: nextClientStatus || c.status,
+                // Belt-and-suspenders: make sure the client is attached to
+                // this agent even if takeClient() somehow didn't run first.
+                assignedAgentId: c.assignedAgentId ?? myAgentId,
+                assignedAgentName: c.assignedAgentName ?? myAgentName,
+                assignedAt: c.assignedAt ?? now,
+              }
             : c
         ),
       };
@@ -980,7 +1038,8 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           dueDate:activeLead.followupDate,
           priority:followupPriorityMap[activeLead.followupType]||'medium',
           followupType:activeLead.followupType||'Regular',
-          status:'pending', createdBy:user?.firstName||'Admin',
+          status:'pending', createdBy: myAgentName,
+          agentId: myAgentId, agentName: myAgentName,
           // Snapshot of what happened during the call, so the Follow-up page
           // can show context without needing to look anything else up.
           callOutcome:activeLead.coStatus, callMethod:activeLead.coMethod,
@@ -1011,7 +1070,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     .filter(p=>Math.abs(p-page)<=2||p===1||p===totalPages)
     .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[]);
 
-  // sources that have at least 1 entry in the queue
+  // sources that have at least 1 entry in the visible queue
   const activeSources = Object.keys(SOURCE_PALETTE).filter(s => metrics.bySource[s] > 0);
 
   return (
@@ -1031,6 +1090,9 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             <h1 style={{ fontSize:22, fontWeight:800, color:C.text, margin:0, letterSpacing:'-.02em' }}>
               New Calls
             </h1>
+            {isSuperAdmin && (
+              <Tag label="Super Admin — viewing all agents" color={C.purple} bg={C.purpleBg} border={C.purpleBorder}/>
+            )}
           </div>
           <p style={{ fontSize:13.5, color:C.textMuted, margin:0 }}>
             Clients awaiting first contact — {queue.length} in queue
@@ -1065,7 +1127,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           color={C.blue}
           bg={C.blueBg}
           border={C.blueBorder}
-          sublabel="All time"
+          sublabel={isSuperAdmin ? 'All agents' : 'By you'}
         />
 
         {/* Follow-ups sent */}
@@ -1076,7 +1138,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           color={C.purple}
           bg={C.purpleBg}
           border={C.purpleBorder}
-          sublabel="Scheduled"
+          sublabel={isSuperAdmin ? 'All agents' : 'Scheduled by you'}
         />
 
         {/* Closed leads */}
@@ -1087,7 +1149,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           color={C.green}
           bg={C.greenBg}
           border={C.greenBorder}
-          sublabel="Converted leads"
+          sublabel={isSuperAdmin ? 'All agents' : 'Your converted leads'}
         />
 
         {/* Dropped / Lost */}
@@ -1098,7 +1160,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
           color={C.red}
           bg={C.redBg}
           border={C.redBorder}
-          sublabel="Lost leads"
+          sublabel={isSuperAdmin ? 'All agents' : 'Your lost leads'}
         />
       </div>
 
@@ -1208,6 +1270,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                   {label:'Source',   align:'left'},
                   {label:'Type',     align:'left'},
                   {label:'Added',    align:'left'},
+                  ...(isSuperAdmin ? [{label:'Agent', align:'left'}] : []),
                   {label:'Actions',  align:'center'},
                 ].map(h => (
                   <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
@@ -1222,7 +1285,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
+                  <td colSpan={isSuperAdmin ? 8 : 7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
                     <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
                       display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
                       <Users size={24} style={{ opacity:.4 }}/>
@@ -1233,13 +1296,14 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                     <div style={{ fontSize:13, opacity:.7 }}>
                       {allClients.length === 0
                         ? 'Add a client or import a list to get started.'
-                        : 'All clients have been called, or adjust your search / filter.'}
+                        : 'All clients have been called, claimed by other agents, or adjust your search / filter.'}
                     </div>
                   </td>
                 </tr>
               ) : pageItems.map((item, i) => {
                 const srcColor = SOURCE_ACCENT[item.source] || C.textMuted;
                 const hovered  = hoveredRow === item.id;
+                const claimedByOther = isSuperAdmin && item.assignedAgentId && item.assignedAgentId !== myAgentId;
                 return (
                   <tr key={item.id}
                     onMouseEnter={()=>setHoveredRow(item.id)}
@@ -1286,10 +1350,23 @@ const NewCall = ({ db, setDb, logAction, user }) => {
                       borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
                       {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
                     </td>
+                    {isSuperAdmin && (
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                        {item.assignedAgentId
+                          ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
+                          : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
+                      </td>
+                    )}
                     <td style={{ padding:'11px 16px', textAlign:'center',
                       borderBottom:`1px solid ${C.border}99` }}>
                       <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
-                        <IconAction icon={Phone}  onClick={()=>openTakeCall(item)}    title="Take call" variant="primary"/>
+                        <IconAction
+                          icon={claimedByOther ? Lock : Phone}
+                          onClick={()=>takeClient(item)}
+                          title={claimedByOther ? `Claimed by ${item.assignedAgentName}` : 'Take call'}
+                          variant="primary"
+                          disabled={claimedByOther}
+                        />
                         <IconAction icon={Pencil} onClick={()=>setEditTarget(item)}   title="Edit"      variant="default"/>
                         <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"    variant="danger"/>
                       </div>

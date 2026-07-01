@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Search, Plus, X, Trash2, Edit3, Phone, Mail, MapPin,
   Building2, Tag, DollarSign, ChevronDown, Users as UsersIcon,
-  Briefcase, Home, Compass, LandPlot
+  Briefcase, Home, Compass, LandPlot, ShieldCheck,
 } from 'lucide-react';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
@@ -47,6 +47,9 @@ const emptyClient = () => ({
   reqFacing: '',
   notes: '',
   createdAt: new Date().toISOString(),
+  assignedAgentId:   null,
+  assignedAgentName: null,
+  assignedAt:        null,
 });
 
 // ─── BADGE ──────────────────────────────────────────────────────────────────
@@ -79,57 +82,93 @@ const formatBudget = (min, max) => {
   return a || b;
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 const ManageClients = ({ db, setDb, logAction, user }) => {
-  const clients = db.clients || [];
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'super_admin';
 
-  const [search, setSearch]   = useState('');
-  const [typeFilter, setTypeFilter] = useState('All');
+  const allClients = db.clients || [];
+
+  // Scope: agents only see their assigned clients
+  const clients = useMemo(() => {
+    if (isSuperAdmin) return allClients;
+    return allClients.filter(c => c.assignedAgentId === user?.id);
+  }, [allClients, isSuperAdmin, user?.id]);
+
+  const [search, setSearch]             = useState('');
+  const [typeFilter, setTypeFilter]     = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [agentFilter, setAgentFilter]   = useState('All');
+  const [showModal, setShowModal]       = useState(false);
+  const [editing, setEditing]           = useState(null);
 
-  // ── FILTERED LIST ──────────────────────────────────────────────────────────
+  // Build agent list for Super Admin filter
+  const agentOptions = useMemo(() => {
+    if (!isSuperAdmin) return [];
+    const map = {};
+    allClients.forEach(c => {
+      if (c.assignedAgentId && c.assignedAgentName) {
+        map[c.assignedAgentId] = c.assignedAgentName;
+      }
+    });
+    return Object.entries(map).map(([id, name]) => ({ id, name }));
+  }, [allClients, isSuperAdmin]);
+
+  // Filtered list
   const filtered = useMemo(() => {
-    return clients.filter(c => {
+    const base = isSuperAdmin ? allClients : clients;
+    return base.filter(c => {
       const q = search.trim().toLowerCase();
       const matchesSearch = !q ||
         c.name?.toLowerCase().includes(q) ||
         c.phone?.toLowerCase().includes(q) ||
         c.email?.toLowerCase().includes(q) ||
         c.location?.toLowerCase().includes(q) ||
-        c.company?.toLowerCase().includes(q);
-      const matchesType = typeFilter === 'All' || c.type === typeFilter;
+        c.company?.toLowerCase().includes(q) ||
+        (isSuperAdmin && c.assignedAgentName?.toLowerCase().includes(q));
+      const matchesType   = typeFilter === 'All' || c.type === typeFilter;
       const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
-      return matchesSearch && matchesType && matchesStatus;
+      const matchesAgent  =
+        !isSuperAdmin ||
+        agentFilter === 'All' ||
+        (agentFilter === 'Unassigned' ? !c.assignedAgentId : c.assignedAgentId === agentFilter);
+      return matchesSearch && matchesType && matchesStatus && matchesAgent;
     }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [clients, search, typeFilter, statusFilter]);
+  }, [clients, allClients, isSuperAdmin, search, typeFilter, statusFilter, agentFilter]);
 
-  // ── STATS ────────────────────────────────────────────────────────────────
+  // Stats scoped to agent's own clients
   const stats = useMemo(() => ({
-    total:   clients.length,
-    leads:   clients.filter(c => c.status === 'Lead').length,
-    active:  clients.filter(c => ['Contacted', 'Negotiation'].includes(c.status)).length,
-    closed:  clients.filter(c => c.status === 'Closed').length,
-  }), [clients]);
+    total:      clients.length,
+    leads:      clients.filter(c => c.status === 'Lead').length,
+    active:     clients.filter(c => ['Contacted', 'Negotiation'].includes(c.status)).length,
+    closed:     clients.filter(c => c.status === 'Closed').length,
+    unassigned: isSuperAdmin ? allClients.filter(c => !c.assignedAgentId).length : 0,
+  }), [clients, allClients, isSuperAdmin]);
 
-  // ── HANDLERS ─────────────────────────────────────────────────────────────
-  const openAdd = () => { setEditing(emptyClient()); setShowModal(true); };
+  const openAdd  = () => { setEditing(emptyClient()); setShowModal(true); };
   const openEdit = (c) => { setEditing({ ...emptyClient(), ...c }); setShowModal(true); };
 
   const handleSave = () => {
     if (!editing.name?.trim()) return;
+    const isExisting = allClients.some(c => c.id === editing.id);
+    const clientToSave = isExisting
+      ? editing
+      : {
+          ...editing,
+          assignedAgentId:   editing.assignedAgentId   ?? user?.id   ?? null,
+          assignedAgentName: editing.assignedAgentName ?? user?.name ?? null,
+          assignedAt:        editing.assignedAt        ?? new Date().toISOString(),
+        };
 
     setDb(prev => {
-      const exists = prev.clients?.some(c => c.id === editing.id);
+      const exists = prev.clients?.some(c => c.id === clientToSave.id);
       const updated = exists
-        ? prev.clients.map(c => c.id === editing.id ? editing : c)
-        : [editing, ...(prev.clients || [])];
+        ? prev.clients.map(c => c.id === clientToSave.id ? clientToSave : c)
+        : [clientToSave, ...(prev.clients || [])];
       return { ...prev, clients: updated };
     });
 
     logAction(
-      clients.some(c => c.id === editing.id) ? 'Updated client' : 'Added client',
+      isExisting ? 'Updated client' : 'Added client',
       'client',
       editing.name
     );
@@ -139,7 +178,7 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
   };
 
   const handleDelete = (id) => {
-    const target = clients.find(c => c.id === id);
+    const target = allClients.find(c => c.id === id);
     setDb(prev => ({ ...prev, clients: prev.clients.filter(c => c.id !== id) }));
     if (target) logAction('Deleted client', 'client', target.name);
   };
@@ -149,14 +188,13 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
       ...prev,
       clients: prev.clients.map(c => {
         if (c.id !== id) return c;
-        const idx = STATUS_OPTIONS.indexOf(c.status);
+        const idx  = STATUS_OPTIONS.indexOf(c.status);
         const next = STATUS_OPTIONS[(idx + 1) % STATUS_OPTIONS.length];
         return { ...c, status: next };
       })
     }));
   };
 
-  // ── FIELD UPDATE HELPER ──────────────────────────────────────────────────
   const set = (key, val) => setEditing(prev => ({ ...prev, [key]: val }));
 
   return (
@@ -172,11 +210,25 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
         justifyContent: 'space-between', marginBottom: 28, gap: 16, flexWrap: 'wrap'
       }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
-            Clients
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            Manage your buyers, sellers, tenants, landlords and investors
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+              {isSuperAdmin ? 'All Clients' : 'My Clients'}
+            </h1>
+            {isSuperAdmin && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontSize: 11, fontWeight: 700, color: '#7c3aed',
+                background: 'rgba(124,58,237,0.10)', border: '1px solid rgba(124,58,237,0.2)',
+                borderRadius: 20, padding: '3px 10px',
+              }}>
+                <ShieldCheck size={12} /> Super Admin — all agents
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 0 }}>
+            {isSuperAdmin
+              ? 'Viewing and managing all clients across every agent.'
+              : 'Manage your buyers, sellers, tenants, landlords and investors.'}
           </p>
         </div>
 
@@ -196,14 +248,16 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
 
       {/* ── STAT CARDS ─────────────────────────────────────────────────── */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 14, marginBottom: 24
       }}>
         {[
-          { label: 'Total Clients', value: stats.total,  color: '#6366F1' },
-          { label: 'New Leads',     value: stats.leads,  color: '#0EA5E9' },
-          { label: 'In Progress',   value: stats.active, color: '#F59E0B' },
-          { label: 'Closed Deals',  value: stats.closed, color: '#22C55E' },
+          { label: isSuperAdmin ? 'Total Clients' : 'My Clients', value: stats.total,  color: '#6366F1' },
+          { label: 'New Leads',    value: stats.leads,      color: '#0EA5E9' },
+          { label: 'In Progress',  value: stats.active,     color: '#F59E0B' },
+          { label: 'Closed Deals', value: stats.closed,     color: '#22C55E' },
+          ...(isSuperAdmin ? [{ label: 'Unassigned', value: stats.unassigned, color: '#F43F5E' }] : []),
         ].map(s => (
           <div key={s.label} style={{
             background: 'var(--surface)', borderRadius: 14,
@@ -232,7 +286,11 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, phone, email, company, or location..."
+            placeholder={
+              isSuperAdmin
+                ? 'Search by name, phone, email, company, agent…'
+                : 'Search by name, phone, email, company, or location…'
+            }
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
               color: 'var(--text)', fontSize: 13
@@ -240,23 +298,25 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
           />
         </div>
 
-        <select
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
-          style={selectStyle}
-        >
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={selectStyle}>
           <option value="All">All Types</option>
           {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
 
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          style={selectStyle}
-        >
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={selectStyle}>
           <option value="All">All Statuses</option>
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+
+        {isSuperAdmin && (
+          <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} style={selectStyle}>
+            <option value="All">All Agents</option>
+            <option value="Unassigned">Unassigned</option>
+            {agentOptions.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* ── CLIENT LIST ────────────────────────────────────────────────── */}
@@ -270,15 +330,19 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
             <UsersIcon size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
             <p style={{ margin: 0, fontSize: 14 }}>
               {clients.length === 0
-                ? 'No clients yet. Add your first client or import a list.'
+                ? isSuperAdmin
+                  ? 'No clients yet. Import or add clients to get started.'
+                  : 'No clients assigned to you yet. Take a call from the New Call page to get started.'
                 : 'No clients match your filters.'}
             </p>
           </div>
         )}
 
         {filtered.map(c => {
-          const sStyle = STATUS_STYLE[c.status] || {};
+          const sStyle  = STATUS_STYLE[c.status] || {};
           const reqParts = [c.reqLand, c.reqFlat, c.reqFacing].filter(Boolean);
+          const canEdit  = isSuperAdmin || c.assignedAgentId === user?.id;
+
           return (
             <div key={c.id} style={{
               display: 'flex', alignItems: 'center', gap: 16,
@@ -304,6 +368,20 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                   <Badge label={c.type} style={{ bg: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }} />
                   {c.purpose && (
                     <Badge label={c.purpose} style={{ bg: 'rgba(99,102,241,0.08)', color: '#818CF8' }} />
+                  )}
+                  {/* Agent tag — Super Admin only */}
+                  {isSuperAdmin && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 11, fontWeight: 600,
+                      color: c.assignedAgentName ? '#7c3aed' : 'var(--text-muted)',
+                      background: c.assignedAgentName ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${c.assignedAgentName ? 'rgba(124,58,237,0.2)' : 'var(--border)'}`,
+                      padding: '2px 8px', borderRadius: 20,
+                    }}>
+                      <ShieldCheck size={10} />
+                      {c.assignedAgentName || 'Unassigned'}
+                    </span>
                   )}
                 </div>
 
@@ -364,33 +442,43 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                 </span>
               </div>
 
-              {/* Status badge (clickable to cycle) */}
+              {/* Status badge — clickable only if agent owns client */}
               <button
-                onClick={() => cycleStatus(c.id)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
-                title="Click to change status"
+                onClick={() => canEdit && cycleStatus(c.id)}
+                style={{
+                  background: 'none', border: 'none',
+                  cursor: canEdit ? 'pointer' : 'default',
+                  padding: 0, flexShrink: 0,
+                }}
+                title={canEdit ? 'Click to change status' : 'You do not own this client'}
               >
                 <Badge label={c.status} style={sStyle} />
               </button>
 
-              {/* Actions */}
+              {/* Actions — only for owner or Super Admin */}
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button
-                  onClick={() => openEdit(c)}
-                  style={iconBtnStyle}
-                  onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                >
-                  <Edit3 size={14} />
-                </button>
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  style={iconBtnStyle}
-                  onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                >
-                  <Trash2 size={14} />
-                </button>
+                {canEdit ? (
+                  <>
+                    <button
+                      onClick={() => openEdit(c)}
+                      style={iconBtnStyle}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      style={iconBtnStyle}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ width: 66 }} />
+                )}
               </div>
             </div>
           );
@@ -412,50 +500,42 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
-                {clients.some(c => c.id === editing.id) ? 'Edit Client' : 'Add New Client'}
+                {allClients.some(c => c.id === editing.id) ? 'Edit Client' : 'Add New Client'}
               </h2>
               <button onClick={() => setShowModal(false)} style={iconBtnStyle}>
                 <X size={18} />
               </button>
             </div>
 
-            {/* ── Basic Info ─────────────────────────────────────────── */}
             <SectionLabel>Basic Info</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Full Name *" full>
                 <input value={editing.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder="e.g. Mr. Ahmed Karim" />
               </Field>
-
               <Field label="Profession">
                 <input value={editing.profession} onChange={e => set('profession', e.target.value)} style={inputStyle} placeholder="e.g. Doctor, Engineer" />
               </Field>
-
               <Field label="Designation">
                 <input value={editing.designation} onChange={e => set('designation', e.target.value)} style={inputStyle} placeholder="e.g. Senior Manager" />
               </Field>
-
               <Field label="Company / Organization" full>
                 <input value={editing.company} onChange={e => set('company', e.target.value)} style={inputStyle} placeholder="e.g. ABC Ltd." />
               </Field>
             </div>
 
-            {/* ── Contact Info ───────────────────────────────────────── */}
             <SectionLabel>Contact Info</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Phone">
                 <input value={editing.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
               </Field>
-
               <Field label="Alternative Number">
                 <input value={editing.altPhone} onChange={e => set('altPhone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
               </Field>
-
               <Field label="Email" full>
                 <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
               </Field>
             </div>
 
-            {/* ── Deal Info ──────────────────────────────────────────── */}
             <SectionLabel>Deal Info</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
               <Field label="Client Type">
@@ -463,50 +543,41 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
                   {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </Field>
-
               <Field label="Purpose">
                 <select value={editing.purpose} onChange={e => set('purpose', e.target.value)} style={inputStyle}>
                   <option value="">— Not specified —</option>
                   {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
-
               <Field label="Status">
                 <select value={editing.status} onChange={e => set('status', e.target.value)} style={inputStyle}>
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
-
               <Field label="Source">
                 <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
                   {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
-
               <Field label="Property Type">
                 <select value={editing.propertyType} onChange={e => set('propertyType', e.target.value)} style={inputStyle}>
                   {PROPERTY_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
-
               <Field label="Preferred Location">
                 <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
               </Field>
-
               <Field label="Budget Min (BDT)">
                 <input type="number" value={editing.budgetMin} onChange={e => set('budgetMin', e.target.value)} style={inputStyle} placeholder="0" />
               </Field>
-
               <Field label="Budget Max (BDT)">
                 <input type="number" value={editing.budgetMax} onChange={e => set('budgetMax', e.target.value)} style={inputStyle} placeholder="0" />
               </Field>
-
               <Field label="Address" full>
                 <input value={editing.address} onChange={e => set('address', e.target.value)} style={inputStyle} placeholder="Full address" />
               </Field>
             </div>
 
-            {/* ── Requirements ───────────────────────────────────────── */}
             <SectionLabel>Requirements</SectionLabel>
             <div style={{
               background: 'var(--bg)', border: '1px solid var(--border)',
@@ -516,17 +587,14 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
               <Field label={<><LandPlot size={12} /> Land Requirement</>}>
                 <input value={editing.reqLand} onChange={e => set('reqLand', e.target.value)} style={inputStyle} placeholder="e.g. wants 5 katha land" />
               </Field>
-
               <Field label={<><Home size={12} /> Flat Requirement</>}>
                 <input value={editing.reqFlat} onChange={e => set('reqFlat', e.target.value)} style={inputStyle} placeholder="e.g. wants 1500 sft flat" />
               </Field>
-
               <Field label={<><Compass size={12} /> Facing Preference</>} full>
                 <input value={editing.reqFacing} onChange={e => set('reqFacing', e.target.value)} style={inputStyle} placeholder="e.g. South faced, Corner plot" />
               </Field>
             </div>
 
-            {/* ── Remarks ────────────────────────────────────────────── */}
             <SectionLabel>Remarks</SectionLabel>
             <div style={{ marginBottom: 8 }}>
               <Field label="Notes / Remarks" full>
@@ -590,7 +658,6 @@ const iconBtnStyle = {
   color: 'var(--text-muted)'
 };
 
-// ─── SECTION LABEL (groups fields in the modal) ──────────────────────────────
 const SectionLabel = ({ children }) => (
   <div style={{
     fontSize: 12, fontWeight: 800, color: 'var(--primary)',
@@ -601,7 +668,6 @@ const SectionLabel = ({ children }) => (
   </div>
 );
 
-// ─── FIELD WRAPPER ────────────────────────────────────────────────────────────
 const Field = ({ label, children, full }) => (
   <div style={{ gridColumn: full ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
     <label style={{

@@ -27,6 +27,7 @@ const ICONS = {
   alert:    "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01",
   done:     "M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3",
   phoneCall:"M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.18 2 2 0 012.22 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z",
+  shield:   "M12 2L4 5v5c0 5.25 3.5 10.15 8 11.35C16.5 20.15 20 15.25 20 10V5L12 2z",
 };
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ const T = {
   warning:   '#F59E0B',
   danger:    '#EF4444',
   info:      '#3B82F6',
+  purple:    '#8B5CF6',
   radius:    12,
   radiusSm:  8,
 };
@@ -173,6 +175,9 @@ const ViewTabs = ({ active, counts, onChange }) => (
 );
 
 // ─── Add / Edit Modal ─────────────────────────────────────────────────────────
+// `clients` passed in here is already scoped to what this user is allowed to
+// create follow-ups for (their own clients, or everyone's for Super Admin) —
+// see the filtering done in the main component before this modal is opened.
 const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
   const [form, setForm] = useState(initial || {
     clientName: '', clientPhone: '', dueDate: '', priority: 'medium',
@@ -272,6 +277,11 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
                 </div>
               )}
             </div>
+            {(clients || []).length === 0 && (
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>
+                No clients assigned to you yet — take a call from New Calls first, or type a name manually.
+              </div>
+            )}
           </div>
 
           {/* Phone */}
@@ -430,7 +440,7 @@ const CallContext = ({ fu, expanded, onToggle }) => {
 };
 
 // ─── Follow-up Card ───────────────────────────────────────────────────────────
-const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
+const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) => {
   const [expanded, setExpanded] = useState(false);
   const [callExpanded, setCallExpanded] = useState(false);
   const pc = PRIORITY_CONFIG[fu.priority] || PRIORITY_CONFIG.medium;
@@ -472,6 +482,15 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {showAgent && fu.agentName && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: T.purple, background: '#F5F3FF',
+                border: `1px solid ${T.purple}30`, borderRadius: 999, padding: '3px 9px',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                <Icon d={ICONS.shield} size={10} color={T.purple} /> {fu.agentName}
+              </span>
+            )}
             <Badge config={sc} />
             <Badge config={pc} />
           </div>
@@ -568,8 +587,28 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed }) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const FollowUp = ({ db, setDb, logAction, user, setView }) => {
-  const followUps = db?.followUps || [];
-  const clients   = db?.clients   || [];
+  const allFollowUps = db?.followUps || [];
+  const allClients   = db?.clients   || [];
+
+  // ── Ownership scoping ───────────────────────────────────────────────────
+  const isSuperAdmin = user?.role === 'superadmin';
+  const myAgentId    = user?.id;
+  const myAgentName  = user?.name || 'Agent';
+
+  // Follow-ups this user is allowed to see. Super Admin sees everyone's;
+  // everyone else only sees follow-ups tied to them (via agentId, stamped
+  // when the follow-up was created).
+  const followUps = useMemo(() => {
+    if (isSuperAdmin) return allFollowUps;
+    return allFollowUps.filter(f => f.agentId === myAgentId);
+  }, [allFollowUps, isSuperAdmin, myAgentId]);
+
+  // Clients this user can pick from when manually adding a follow-up —
+  // their own claimed clients only (Super Admin can pick anyone's).
+  const clients = useMemo(() => {
+    if (isSuperAdmin) return allClients;
+    return allClients.filter(c => c.assignedAgentId === myAgentId);
+  }, [allClients, isSuperAdmin, myAgentId]);
 
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -578,7 +617,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const [viewTab, setViewTab]     = useState('all'); // 'all' | 'previous' | 'today' | 'upcoming'
   const [modal, setModal]         = useState(null); // null | { mode: 'add'|'edit', data? }
 
-  // ── Stats ──────────────────────────────────────────────────────────────
+  // ── Stats (scoped) ─────────────────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
   const stats = useMemo(() => ({
     total:     followUps.length,
@@ -668,13 +707,17 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         ...form,
         id: Date.now(),
         createdAt: new Date().toISOString(),
-        agentId: user?.id,
-        agentName: user?.name || 'Agent',
+        // Always stamped from the logged-in user — never selectable — so a
+        // follow-up always has a clear, provable owner.
+        agentId: myAgentId,
+        agentName: myAgentName,
+        createdBy: myAgentName,
         status: 'pending',
       };
       setDb(prev => ({ ...prev, followUps: [entry, ...(prev.followUps || [])] }));
       logAction?.('Added follow-up', 'followup', form.clientName);
     } else {
+      // Editing never changes ownership — keep the original agentId/agentName.
       updateFU(modal.data.id, form);
       logAction?.('Edited follow-up', 'followup', form.clientName);
     }
@@ -698,11 +741,23 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Follow-ups</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Follow-ups</h1>
+            {isSuperAdmin && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: T.purple, background: '#F5F3FF',
+                border: `1px solid ${T.purple}30`, borderRadius: 999, padding: '3px 10px',
+              }}>
+                Super Admin — viewing all agents
+              </span>
+            )}
+          </div>
           <p style={{ color: T.textMuted, fontSize: 14.5, margin: '5px 0 0' }}>
-            Track and manage pending client follow-ups. Stay on top of every lead.
+            {isSuperAdmin
+              ? 'Track pending follow-ups across every agent.'
+              : 'Track and manage your pending client follow-ups. Stay on top of every lead.'}
           </p>
         </div>
         <button onClick={() => setModal({ mode: 'add' })} style={{
@@ -820,6 +875,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
             {visible.map(fu => (
               <FUCard
                 key={fu.id} fu={fu}
+                showAgent={isSuperAdmin}
                 onEdit={data => setModal({ mode: 'edit', data })}
                 onDelete={handleDelete}
                 onMarkDone={handleMarkDone}

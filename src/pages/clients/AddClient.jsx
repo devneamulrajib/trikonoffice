@@ -35,6 +35,10 @@ const emptyClient = () => ({
   reqFacing: '',
   notes: '',
   createdAt: new Date().toISOString(),
+  // ── Ownership / assignment (new clients always start unclaimed) ──────────
+  assignedAgentId: null,
+  assignedAgentName: null,
+  assignedAt: null,
 });
 
 // ─── SHARED STYLES (matches ManageClients.jsx) ───────────────────────────────

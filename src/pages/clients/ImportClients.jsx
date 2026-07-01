@@ -120,6 +120,10 @@ const buildClients = (rows) => {
       reqFacing: get('requirments/facing'),
       notes: get('remarks') || get('notes'),
       createdAt: new Date().toISOString(),
+      // ── Ownership / assignment (imported clients always start unclaimed) ──
+      assignedAgentId: null,
+      assignedAgentName: null,
+      assignedAt: null,
     });
   });
 

@@ -83,7 +83,7 @@ const formatBudget = (min, max) => {
 };
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-const ManageClients = ({ db, setDb, logAction, user }) => {
+const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient }) => {
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'super_admin';
 
   const allClients = db.clients || [];
@@ -147,52 +147,27 @@ const ManageClients = ({ db, setDb, logAction, user }) => {
   const openAdd  = () => { setEditing(emptyClient()); setShowModal(true); };
   const openEdit = (c) => { setEditing({ ...emptyClient(), ...c }); setShowModal(true); };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editing.name?.trim()) return;
     const isExisting = allClients.some(c => c.id === editing.id);
-    const clientToSave = isExisting
-      ? editing
-      : {
-          ...editing,
-          assignedAgentId:   editing.assignedAgentId   ?? user?.id   ?? null,
-          assignedAgentName: editing.assignedAgentName ?? user?.name ?? null,
-          assignedAt:        editing.assignedAt        ?? new Date().toISOString(),
-        };
-
-    setDb(prev => {
-      const exists = prev.clients?.some(c => c.id === clientToSave.id);
-      const updated = exists
-        ? prev.clients.map(c => c.id === clientToSave.id ? clientToSave : c)
-        : [clientToSave, ...(prev.clients || [])];
-      return { ...prev, clients: updated };
-    });
-
-    logAction(
-      isExisting ? 'Updated client' : 'Added client',
-      'client',
-      editing.name
-    );
-
+    const saved = await saveClient(editing);
+    logAction(isExisting ? 'Updated client' : 'Added client', 'client', saved.name);
     setShowModal(false);
     setEditing(null);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const target = allClients.find(c => c.id === id);
-    setDb(prev => ({ ...prev, clients: prev.clients.filter(c => c.id !== id) }));
+    await deleteClient(id);
     if (target) logAction('Deleted client', 'client', target.name);
   };
 
-  const cycleStatus = (id) => {
-    setDb(prev => ({
-      ...prev,
-      clients: prev.clients.map(c => {
-        if (c.id !== id) return c;
-        const idx  = STATUS_OPTIONS.indexOf(c.status);
-        const next = STATUS_OPTIONS[(idx + 1) % STATUS_OPTIONS.length];
-        return { ...c, status: next };
-      })
-    }));
+  const cycleStatus = async (id) => {
+    const c = allClients.find(x => x.id === id);
+    if (!c) return;
+    const idx  = STATUS_OPTIONS.indexOf(c.status);
+    const next = STATUS_OPTIONS[(idx + 1) % STATUS_OPTIONS.length];
+    await saveClient({ ...c, status: next });
   };
 
   const set = (key, val) => setEditing(prev => ({ ...prev, [key]: val }));

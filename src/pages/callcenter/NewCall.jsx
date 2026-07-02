@@ -869,7 +869,7 @@ const DividerLabel = ({ children }) => (
 );
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-const NewCall = ({ db, setDb, logAction, user }) => {
+const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteClient, logCallOnClient }) => {
   const [search,       setSearch]       = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [page,         setPage]         = useState(1);
@@ -879,6 +879,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
   const [editTarget,   setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hoveredRow,   setHoveredRow]   = useState(null);
+  const [claimError,   setClaimError]   = useState(null);
 
   const allClients = db?.clients  || [];
   const callLogs   = db?.callLogs  || [];
@@ -958,23 +959,19 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     followupNote:'', callStatus:'',
   });
 
-  // Clicking "Take call": if the client is still unclaimed, attach it to
-  // this agent right away (this is the moment ownership is created). If
-  // it's already theirs (they opened it before and closed without logging),
-  // just reopen — no need to reassign.
-  const takeClient = lead => {
+  // Clicking "Take call": claim the client atomically on the server first.
+  // If someone else already has it, the claim fails (409) and we show a
+  // toast instead of opening the modal — no more silent overwrite conflicts.
+  const takeClient = async (lead) => {
     if (isUnassigned(lead)) {
-      const assignedAt = new Date().toISOString();
-      setDb(prev => ({
-        ...prev,
-        clients: (prev.clients||[]).map(c =>
-          c.id === lead.id
-            ? { ...c, assignedAgentId: myAgentId, assignedAgentName: myAgentName, assignedAt }
-            : c
-        ),
-      }));
+      const result = await claimClient(lead.id);
+      if (!result.ok) {
+        setClaimError({ agentName: result.assignedAgentName || 'another agent' });
+        setTimeout(() => setClaimError(null), 4000);
+        return;
+      }
       logAction?.('Took client', 'Client', lead.name);
-      openTakeCall({ ...lead, assignedAgentId: myAgentId, assignedAgentName: myAgentName, assignedAt });
+      openTakeCall(result.client);
     } else {
       openTakeCall(lead);
     }
@@ -984,7 +981,7 @@ const NewCall = ({ db, setDb, logAction, user }) => {
 
   const followupPriorityMap = { Priority:'high', 'Site Visit':'medium', Regular:'low' };
 
-  const submitCall = () => {
+  const submitCall = async () => {
     if (!activeLead) return;
     const now = new Date().toISOString();
 
@@ -1011,23 +1008,19 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     else if (activeLead.callStatus === 'Not Interested') nextClientStatus = 'Contacted';
     else if (activeLead.callStatus === 'Followup')       nextClientStatus = 'Contacted';
 
+    // Client status/calledAt now live in the clients table — persist via the
+    // dedicated endpoint instead of the whole-blob PUT.
+    const updatedClient = await logCallOnClient(activeLead.id, {
+      status: nextClientStatus,
+      calledAt: now,
+    });
+
     const hasFu = Boolean(activeLead.followupDate);
     setDb(prev => {
       const next = {
         ...prev,
         callLogs:[entry,...(prev.callLogs||[])],
-        clients:(prev.clients||[]).map(c =>
-          c.id===activeLead.id
-            ? {
-                ...c, calledAt:now, status: nextClientStatus || c.status,
-                // Belt-and-suspenders: make sure the client is attached to
-                // this agent even if takeClient() somehow didn't run first.
-                assignedAgentId: c.assignedAgentId ?? myAgentId,
-                assignedAgentName: c.assignedAgentName ?? myAgentName,
-                assignedAt: c.assignedAt ?? now,
-              }
-            : c
-        ),
+        clients:(prev.clients||[]).map(c => c.id===activeLead.id ? updatedClient : c),
       };
       if (hasFu) {
         next.followUps = [{
@@ -1057,11 +1050,17 @@ const NewCall = ({ db, setDb, logAction, user }) => {
     setActiveLead(null);
   };
 
-  const addClient    = c => { setDb(prev=>({...prev,clients:[c,...(prev.clients||[])]})); logAction?.('Added client','Client',c.name); };
-  const editClient   = c => { setDb(prev=>({...prev,clients:(prev.clients||[]).map(x=>x.id===c.id?c:x)})); logAction?.('Updated client','Client',c.name); };
-  const confirmDelete = () => {
+  const addClient = async (c) => {
+    const saved = await saveClient(c);
+    logAction?.('Added client','Client',saved.name);
+  };
+  const editClient = async (c) => {
+    const saved = await saveClient(c);
+    logAction?.('Updated client','Client',saved.name);
+  };
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
-    setDb(prev=>({...prev,clients:(prev.clients||[]).filter(c=>c.id!==deleteTarget.id)}));
+    await deleteClient(deleteTarget.id);
     logAction?.('Deleted client','Client',deleteTarget.name);
     setDeleteTarget(null);
   };
@@ -1408,6 +1407,19 @@ const NewCall = ({ db, setDb, logAction, user }) => {
         {editTarget   && <ClientFormModal key="edit" client={editTarget} onClose={()=>setEditTarget(null)} onSave={editClient}/>}
         {deleteTarget && <DeleteConfirmModal key="del" client={deleteTarget} onCancel={()=>setDeleteTarget(null)} onConfirm={confirmDelete}/>}
         {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} user={user}/>}
+      </AnimatePresence>
+
+      {/* ── Conflict toast: shown when someone else claims a client first ── */}
+      <AnimatePresence>
+        {claimError && (
+          <motion.div
+            initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:12 }}
+            style={{ position:'fixed', bottom:20, right:20, zIndex:2000, background:C.red, color:'#fff',
+              padding:'12px 18px', borderRadius:C.r.md, fontSize:13, fontWeight:600, boxShadow:C.shadow.lg,
+              display:'flex', alignItems:'center', gap:8 }}>
+            <Lock size={15}/> That client was just claimed by {claimError.agentName}.
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.div>
   );

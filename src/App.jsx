@@ -87,6 +87,7 @@ const VIEW_PERM_MAP = {
 // ─── DATA SYNC CONFIG ─────────────────────────────────────────────────────────
 const LOCAL_CACHE_KEY  = 'clear_db_v6';
 const SYNC_DEBOUNCE_MS = 600;
+const CLIENTS_POLL_MS  = 8000;
 
 // ─── ROLE / LANDING HELPERS ───────────────────────────────────────────────────
 // Call center users never see the finance Dashboard — they land straight on
@@ -221,14 +222,20 @@ const ClearSuite = () => {
   }, []);
 
   // ── Debounced server sync ────────────────────────────────────────────────
+  // NOTE: `clients` is deliberately stripped out of this payload — clients
+  // now live in their own DB table (see /api/clients routes) so that taking
+  // a call can be an atomic, race-free operation. Only everything else
+  // (expenses, budgets, call logs, follow-ups, etc.) still goes through the
+  // single JSON blob.
   const syncToServer = useCallback(() => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
       try {
         setSyncStatus('saving');
+        const { clients, ...payload } = dbRef.current;
         const res = await authedFetch('/api/data', {
           method: 'PUT',
-          body:   JSON.stringify(dbRef.current),
+          body:   JSON.stringify(payload),
         });
         if (!res.ok) throw new Error('Save failed');
         setSyncStatus('synced');
@@ -303,6 +310,91 @@ const ClearSuite = () => {
     loadData();
     return () => { cancelled = true; };
   }, [isAuth, authedFetch]);
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ── CLIENTS: separate from the blob, polled, atomic claim ─────────────
+  // ══════════════════════════════════════════════════════════════════════
+
+  const fetchClients = useCallback(async () => {
+    try {
+      const res = await authedFetch('/api/clients');
+      if (!res.ok) return;
+      const clients = await res.json();
+      setDbState(prev => ({ ...prev, clients }));
+    } catch (err) {
+      console.error('Failed to fetch clients:', err);
+    }
+  }, [authedFetch]);
+
+  // Poll so agents see each other's claims without needing to reload the
+  // page. This does NOT create races on its own — the actual claim below
+  // is atomic at the database level regardless of how stale the UI looks.
+  useEffect(() => {
+    if (!isAuth || !dbLoaded) return;
+    fetchClients();
+    const interval = setInterval(fetchClients, CLIENTS_POLL_MS);
+    return () => clearInterval(interval);
+  }, [isAuth, dbLoaded, fetchClients]);
+
+  // The core fix: atomically claim a client. Returns { ok:false, assignedAgentName }
+  // if someone else already has it — the UI should show that, not open the
+  // call modal.
+  const claimClient = useCallback(async (id) => {
+    const res = await authedFetch(`/api/clients/${id}/claim`, { method: 'PATCH' });
+    const data = await res.json();
+    if (!res.ok) {
+      fetchClients(); // refresh so the UI reflects who actually has it
+      return { ok: false, ...data };
+    }
+    setDbState(prev => ({
+      ...prev,
+      clients: prev.clients.map(c => c.id === id ? data : c),
+    }));
+    return { ok: true, client: data };
+  }, [authedFetch, fetchClients]);
+
+  const saveClient = useCallback(async (client) => {
+    const isExisting = (dbRef.current.clients || []).some(c => c.id === client.id);
+    const res = await authedFetch(
+      isExisting ? `/api/clients/${client.id}` : '/api/clients',
+      { method: isExisting ? 'PUT' : 'POST', body: JSON.stringify(client) }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Save failed');
+    setDbState(prev => ({
+      ...prev,
+      clients: isExisting
+        ? prev.clients.map(c => c.id === client.id ? data : c)
+        : [data, ...prev.clients],
+    }));
+    return data;
+  }, [authedFetch]);
+
+  const deleteClient = useCallback(async (id) => {
+    const res = await authedFetch(`/api/clients/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    setDbState(prev => ({ ...prev, clients: prev.clients.filter(c => c.id !== id) }));
+  }, [authedFetch]);
+
+  const bulkImportClients = useCallback(async (clients) => {
+    const res = await authedFetch('/api/clients/bulk', {
+      method: 'POST',
+      body:   JSON.stringify({ clients }),
+    });
+    if (!res.ok) throw new Error('Import failed');
+    await fetchClients();
+  }, [authedFetch, fetchClients]);
+
+  const logCallOnClient = useCallback(async (id, { status, calledAt }) => {
+    const res = await authedFetch(`/api/clients/${id}/log-call`, {
+      method: 'PATCH',
+      body:   JSON.stringify({ status, calledAt }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error('Log call failed');
+    setDbState(prev => ({ ...prev, clients: prev.clients.map(c => c.id === id ? data : c) }));
+    return data;
+  }, [authedFetch]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const logAction = (action, type, target) => {
@@ -398,7 +490,10 @@ const ClearSuite = () => {
   }
 
   const isViewForbidden  = !userCan(view);
-  const ccProps          = { db, setDb, logAction, user, setView: safeSetView };
+  const ccProps          = {
+    db, setDb, logAction, user, setView: safeSetView,
+    claimClient, saveClient, deleteClient, bulkImportClients, logCallOnClient,
+  };
 
   return (
     <div style={{

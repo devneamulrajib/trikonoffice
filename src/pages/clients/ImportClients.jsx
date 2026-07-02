@@ -148,7 +148,7 @@ const downloadTemplate = () => {
 };
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-const ImportClients = ({ db, setDb, logAction, user }) => {
+const ImportClients = ({ db, setDb, logAction, user, bulkImportClients }) => {
   const [mode, setMode] = useState('file'); // 'file' | 'paste'
   const [pasteText, setPasteText] = useState('');
   const [preview, setPreview] = useState(null); // { clients, errors }
@@ -183,15 +183,10 @@ const ImportClients = ({ db, setDb, logAction, user }) => {
     setPreview(buildClients(rows));
   };
 
-  // ── COMMIT TO DB ─────────────────────────────────────────────────────────
-  const handleImport = () => {
+  // ── COMMIT TO DB (via API) ───────────────────────────────────────────────
+  const handleImport = async () => {
     if (!preview || preview.clients.length === 0) return;
-
-    setDb(prev => ({
-      ...prev,
-      clients: [...preview.clients, ...(prev.clients || [])]
-    }));
-
+    await bulkImportClients(preview.clients);
     logAction('Imported clients', 'client', `${preview.clients.length} record(s)`);
     setImported(true);
   };

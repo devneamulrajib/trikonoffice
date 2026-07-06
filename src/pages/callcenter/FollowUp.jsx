@@ -29,6 +29,8 @@ const ICONS = {
   phoneCall:"M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.18 2 2 0 012.22 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z",
   shield:   "M12 2L4 5v5c0 5.25 3.5 10.15 8 11.35C16.5 20.15 20 15.25 20 10V5L12 2z",
   mapPin:   "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z M12 13a3 3 0 100-6 3 3 0 000 6z",
+  send:     "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z",
+  history:  "M3 3v5h5M3.05 13a9 9 0 106.13-8.63L3 8",
 };
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -82,6 +84,32 @@ const EMPTY_TAB_COPY = {
   previous: { title: 'No previous follow-ups',   body: 'Follow-ups will show up here once their due date has passed.' },
   today:    { title: 'Nothing due today',        body: "You're all caught up for today." },
   upcoming: { title: 'No upcoming follow-ups',   body: 'Add a follow-up with a future due date to see it here.' },
+};
+
+// ─── Notes helpers (multi-note history, backward compatible with old `note` field) ──
+const getNotes = (fu) => {
+  if (!fu) return [];
+  if (Array.isArray(fu.notes) && fu.notes.length) return fu.notes;
+  if (fu.note && fu.note.trim()) {
+    return [{
+      id: `${fu.id || 'legacy'}-legacy`,
+      text: fu.note,
+      createdAt: fu.createdAt || new Date().toISOString(),
+      createdBy: fu.createdBy || fu.agentName || 'Agent',
+    }];
+  }
+  return [];
+};
+
+const formatNoteTime = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const datePart = sameDay ? 'Today' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timePart = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${datePart} · ${timePart}`;
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -170,14 +198,31 @@ const ViewTabs = ({ active, counts, onChange }) => (
   </div>
 );
 
-// ─── Add / Edit Modal (follow-up) ─────────────────────────────────────────────
-const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
-  const [form, setForm] = useState(initial || {
-    clientName: '', clientPhone: '', dueDate: '', priority: 'medium',
-    note: '', status: 'pending',
-  });
-  const [clientSearch, setClientSearch] = useState(initial?.clientName || '');
+// ─── RIGHT-SIDE FOLLOW-UP PANEL (replaces the old centered Add/Edit modal) ────
+// Handles both "add" and "edit" modes. In edit mode it shows the full note
+// history as a timeline and lets you append new notes without losing old ones.
+const FollowUpPanel = ({ mode, fu, clients, onSaveMeta, onAddNote, onClose }) => {
+  const isEdit = mode === 'edit';
+
+  const [meta, setMeta] = useState(() => isEdit
+    ? {
+        clientName: fu.clientName || '',
+        clientPhone: fu.clientPhone || '',
+        dueDate: fu.dueDate || '',
+        priority: fu.priority || 'medium',
+        status: fu.status || 'pending',
+      }
+    : {
+        clientName: '', clientPhone: '', dueDate: '', priority: 'medium', status: 'pending',
+      }
+  );
+
+  const [clientSearch, setClientSearch] = useState(isEdit ? (fu.clientName || '') : '');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [initialNote, setInitialNote] = useState(''); // only used in add mode
+
+  const setM = (k, v) => setMeta(p => ({ ...p, [k]: v }));
 
   const filtered = useMemo(() => {
     if (!clientSearch.trim()) return (clients || []).slice(0, 6);
@@ -187,107 +232,130 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
     ).slice(0, 6);
   }, [clients, clientSearch]);
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const notes = isEdit ? getNotes(fu) : [];
 
-  const handleSave = () => {
-    if (!form.clientName || !form.dueDate) return;
-    onSave(form);
+  const handleSaveMeta = () => {
+    if (!meta.clientName || !meta.dueDate) return;
+    onSaveMeta(meta, initialNote);
+  };
+
+  const handleAddNote = () => {
+    if (!newNote.trim()) return;
+    onAddNote(fu.id, newNote.trim());
+    setNewNote('');
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)',
-      zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
+      {/* backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)' }}
+      />
+      {/* panel */}
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
         style={{
-          background: T.surface, borderRadius: 16, width: '100%', maxWidth: 520,
-          boxShadow: '0 24px 80px rgba(0,0,0,0.15)', overflow: 'hidden',
-        }}>
-        <div style={{ padding: '20px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>
-              {initial ? 'Edit Follow-up' : 'Add Follow-up'}
-            </h3>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: T.textMuted }}>
-              {initial ? 'Update the details for this follow-up.' : 'Schedule a follow-up for a client.'}
-            </p>
+          position: 'absolute', top: 0, right: 0, bottom: 0,
+          width: 'min(460px, 100vw)', background: T.surface,
+          boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: '20px 22px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>
+                {isEdit ? 'Follow-up Details' : 'Add Follow-up'}
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: T.textMuted }}>
+                {isEdit ? `${fu.clientName} · ${fu.clientPhone || 'No phone'}` : 'Schedule a follow-up for a client.'}
+              </p>
+            </div>
+            <button onClick={onClose} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+              <Icon d={ICONS.x} size={16} color={T.textMid} />
+            </button>
           </div>
-          <button onClick={onClose} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer', display: 'flex' }}>
-            <Icon d={ICONS.x} size={16} color={T.textMid} />
-          </button>
         </div>
 
-        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Client *</div>
-            <div style={{ position: 'relative' }}>
-              <input
-                value={clientSearch}
-                onChange={e => { setClientSearch(e.target.value); set('clientName', e.target.value); setShowDropdown(true); }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Search or type client name…"
-                style={{
-                  width: '100%', padding: '10px 13px',
-                  border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-                  fontSize: 14, color: T.text, background: T.surface,
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-              />
-              {showDropdown && filtered.length > 0 && (
-                <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                  background: T.surface, border: `1px solid ${T.border}`,
-                  borderRadius: T.radiusSm, boxShadow: '0 8px 24px rgba(0,0,0,0.09)',
-                  marginTop: 4, overflow: 'hidden',
-                }}>
-                  {filtered.map(c => (
-                    <div key={c.id} onClick={() => {
-                      setForm(p => ({ ...p, clientName: c.name, clientPhone: c.phone || '' }));
-                      setClientSearch(c.name);
-                      setShowDropdown(false);
-                    }} style={{
-                      padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${T.border}`,
-                      display: 'flex', alignItems: 'center', gap: 10,
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <div style={{
-                        width: 30, height: 30, borderRadius: '50%',
-                        background: `${T.primary}15`, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: 12, fontWeight: 700, color: T.primary,
-                      }}>{c.name[0]}</div>
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{c.name}</div>
-                        <div style={{ fontSize: 12, color: T.textMuted }}>{c.phone}</div>
+          {!isEdit && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Client *</div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  value={clientSearch}
+                  onChange={e => { setClientSearch(e.target.value); setM('clientName', e.target.value); setShowDropdown(true); }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Search or type client name…"
+                  style={{
+                    width: '100%', padding: '10px 13px',
+                    border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                    fontSize: 14, color: T.text, background: T.surface,
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                {showDropdown && filtered.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                    background: T.surface, border: `1px solid ${T.border}`,
+                    borderRadius: T.radiusSm, boxShadow: '0 8px 24px rgba(0,0,0,0.09)',
+                    marginTop: 4, overflow: 'hidden',
+                  }}>
+                    {filtered.map(c => (
+                      <div key={c.id} onClick={() => {
+                        setMeta(p => ({ ...p, clientName: c.name, clientPhone: c.phone || '' }));
+                        setClientSearch(c.name);
+                        setShowDropdown(false);
+                      }} style={{
+                        padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${T.border}`,
+                        display: 'flex', alignItems: 'center', gap: 10,
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '50%',
+                          background: `${T.primary}15`, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontSize: 12, fontWeight: 700, color: T.primary,
+                        }}>{c.name[0]}</div>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{c.name}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{c.phone}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+              {(clients || []).length === 0 && (
+                <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>
+                  No clients assigned to you yet — take a call from New Calls first, or type a name manually.
                 </div>
               )}
             </div>
-            {(clients || []).length === 0 && (
-              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>
-                No clients assigned to you yet — take a call from New Calls first, or type a name manually.
-              </div>
-            )}
-          </div>
+          )}
 
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Phone</div>
-            <Input value={form.clientPhone} onChange={e => set('clientPhone', e.target.value)} placeholder="01XXXXXXXXX" />
-          </div>
+          {!isEdit && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Phone</div>
+              <Input value={meta.clientPhone} onChange={e => setM('clientPhone', e.target.value)} placeholder="01XXXXXXXXX" />
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Due Date *</div>
-              <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+              <Input type="date" value={meta.dueDate} onChange={e => setM('dueDate', e.target.value)} />
             </div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Priority</div>
-              <Select value={form.priority} onChange={e => set('priority', e.target.value)}>
+              <Select value={meta.priority} onChange={e => setM('priority', e.target.value)}>
                 <option value="high">🔴 High</option>
                 <option value="medium">🟡 Medium</option>
                 <option value="low">🟢 Low</option>
@@ -295,10 +363,10 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
             </div>
           </div>
 
-          {initial && (
+          {isEdit && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Status</div>
-              <Select value={form.status} onChange={e => set('status', e.target.value)}>
+              <Select value={meta.status} onChange={e => setM('status', e.target.value)}>
                 <option value="pending">⏳ Pending</option>
                 <option value="completed">✅ Completed</option>
                 <option value="missed">❌ Missed</option>
@@ -307,26 +375,70 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
             </div>
           )}
 
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Note</div>
-            <Textarea value={form.note} onChange={e => set('note', e.target.value)} placeholder="What to discuss, key points to cover, client preferences…" />
-          </div>
+          <button onClick={handleSaveMeta} disabled={!meta.clientName || !meta.dueDate} style={{
+            padding: '11px 0', border: 'none', borderRadius: T.radiusSm,
+            background: (!meta.clientName || !meta.dueDate) ? '#CBD5E1' : T.primary,
+            color: '#fff', fontWeight: 700, fontSize: 14,
+            cursor: (!meta.clientName || !meta.dueDate) ? 'not-allowed' : 'pointer',
+          }}>
+            {isEdit ? 'Save Changes' : 'Create Follow-up'}
+          </button>
 
-          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
-            <button onClick={onClose} style={{
-              flex: 1, padding: '11px 0', border: `1.5px solid ${T.border}`,
-              borderRadius: T.radiusSm, background: T.surface, color: T.textMid,
-              fontWeight: 600, fontSize: 14, cursor: 'pointer',
-            }}>Cancel</button>
-            <button onClick={handleSave} disabled={!form.clientName || !form.dueDate} style={{
-              flex: 2, padding: '11px 0', border: 'none',
-              borderRadius: T.radiusSm,
-              background: (!form.clientName || !form.dueDate) ? '#CBD5E1' : T.primary,
-              color: '#fff', fontWeight: 700, fontSize: 14,
-              cursor: (!form.clientName || !form.dueDate) ? 'not-allowed' : 'pointer',
-            }}>
-              {initial ? 'Save Changes' : 'Add Follow-up'}
-            </button>
+          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              <Icon d={ICONS.history} size={15} color={T.textMid} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {isEdit ? `Notes History${notes.length ? ` (${notes.length})` : ''}` : 'Initial Note'}
+              </div>
+            </div>
+
+            {isEdit ? (
+              <>
+                {notes.length === 0 ? (
+                  <div style={{ fontSize: 13.5, color: T.textMuted, padding: '10px 0' }}>
+                    No notes yet for this follow-up. Add the first one below.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                    {notes.map((n, i) => (
+                      <div key={n.id || i} style={{
+                        background: '#F8FAFC', border: `1px solid ${T.border}`,
+                        borderRadius: T.radiusSm, padding: '10px 12px',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: T.primary }}>{n.createdBy || 'Agent'}</span>
+                          <span style={{ fontSize: 11.5, color: T.textMuted }}>{formatNoteTime(n.createdAt)}</span>
+                        </div>
+                        <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Textarea
+                    value={newNote}
+                    onChange={e => setNewNote(e.target.value)}
+                    placeholder="Add a new note about this follow-up…"
+                    style={{ minHeight: 70 }}
+                  />
+                  <button onClick={handleAddNote} disabled={!newNote.trim()} style={{
+                    alignSelf: 'flex-end', padding: '9px 18px', border: 'none',
+                    borderRadius: T.radiusSm, background: !newNote.trim() ? '#CBD5E1' : T.primary,
+                    color: '#fff', fontWeight: 700, fontSize: 13, cursor: !newNote.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <Icon d={ICONS.send} size={13} color="#fff" /> Add Note
+                  </button>
+                </div>
+              </>
+            ) : (
+              <Textarea
+                value={initialNote}
+                onChange={e => setInitialNote(e.target.value)}
+                placeholder="What to discuss, key points to cover, client preferences…"
+              />
+            )}
           </div>
         </div>
       </motion.div>
@@ -334,9 +446,7 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
   );
 };
 
-// ─── Schedule Visit Modal (NEW) ────────────────────────────────────────────────
-// Compact modal reachable straight from a follow-up card. Pre-fills the client
-// snapshot from the follow-up so the agent doesn't retype anything.
+// ─── Schedule Visit Modal (unchanged) ─────────────────────────────────────────
 const ScheduleVisitModal = ({ fu, onSave, onClose }) => {
   const [form, setForm] = useState({
     scheduledDate: '', scheduledTime: '',
@@ -515,13 +625,15 @@ const CallContext = ({ fu, expanded, onToggle }) => {
 
 // ─── Follow-up Card ───────────────────────────────────────────────────────────
 const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, onScheduleVisit, showAgent }) => {
-  const [expanded, setExpanded] = useState(false);
   const [callExpanded, setCallExpanded] = useState(false);
   const pc = PRIORITY_CONFIG[fu.priority] || PRIORITY_CONFIG.medium;
   const sc = STATUS_CONFIG[fu.status] || STATUS_CONFIG.pending;
   const today = new Date().toISOString().slice(0, 10);
   const overdue = fu.status === 'pending' && fu.dueDate < today;
   const isSiteVisitType = fu.followupType === 'Site Visit';
+
+  const notes = getNotes(fu);
+  const latestNote = notes.length ? notes[notes.length - 1] : null;
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -588,20 +700,31 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, onScheduleVisi
           )}
         </div>
 
-        {fu.note && (
+        {latestNote && (
           <div style={{
             marginTop: 10, padding: '10px 12px', background: '#F8FAFC',
             borderRadius: T.radiusSm, fontSize: 13.5, color: T.textMid, lineHeight: 1.5,
-            display: '-webkit-box', WebkitLineClamp: expanded ? 'unset' : 2,
-            WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>{fu.note}</div>
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Latest note
+              </span>
+              <span style={{ fontSize: 11, color: T.textMuted }}>{formatNoteTime(latestNote.createdAt)}</span>
+            </div>
+            <div style={{
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>{latestNote.text}</div>
+          </div>
         )}
-        {fu.note && fu.note.length > 80 && (
-          <button onClick={() => setExpanded(v => !v)} style={{
-            marginTop: 4, background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 12.5, color: T.primary, fontWeight: 600, padding: '2px 0',
-          }}>{expanded ? 'Show less' : 'Show more'}</button>
-        )}
+
+        <button onClick={() => onEdit(fu)} style={{
+          marginTop: 8, background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: 12.5, color: T.primary, fontWeight: 700, padding: '2px 0',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          <Icon d={ICONS.history} size={13} color={T.primary} />
+          {notes.length > 1 ? `View all ${notes.length} notes` : notes.length === 1 ? 'View note history' : 'Add a note'}
+        </button>
 
         <CallContext fu={fu} expanded={callExpanded} onToggle={() => setCallExpanded(v => !v)} />
 
@@ -700,8 +823,8 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy]       = useState('due_asc');
   const [viewTab, setViewTab]     = useState('all');
-  const [modal, setModal]         = useState(null); // null | { mode: 'add'|'edit', data? }
-  const [visitModalFor, setVisitModalFor] = useState(null); // NEW: follow-up currently scheduling a visit for
+  const [panel, setPanel]         = useState(null); // null | { mode: 'add'|'edit', id? }
+  const [visitModalFor, setVisitModalFor] = useState(null);
 
   const today = new Date().toISOString().slice(0, 10);
   const stats = useMemo(() => ({
@@ -731,7 +854,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
       list = list.filter(f =>
         (f.clientName || '').toLowerCase().includes(q) ||
         (f.clientPhone || '').includes(q) ||
-        (f.note || '').toLowerCase().includes(q)
+        getNotes(f).some(n => (n.text || '').toLowerCase().includes(q))
       );
     }
     if (filterStatus !== 'all') list = list.filter(f => f.status === filterStatus);
@@ -782,27 +905,47 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     logAction?.('Deleted follow-up', 'followup', id);
   };
 
-  const handleSave = (form) => {
-    if (modal.mode === 'add') {
+  // Saves the editable meta fields (client/due date/priority/status).
+  // In "add" mode this creates the record, optionally seeding the first note.
+  const handleSaveMeta = (meta, initialNoteText) => {
+    if (panel.mode === 'add') {
+      const notes = initialNoteText && initialNoteText.trim()
+        ? [{ id: `${Date.now()}-1`, text: initialNoteText.trim(), createdAt: new Date().toISOString(), createdBy: myAgentName }]
+        : [];
       const entry = {
-        ...form,
+        ...meta,
         id: Date.now(),
         createdAt: new Date().toISOString(),
         agentId: myAgentId,
         agentName: myAgentName,
         createdBy: myAgentName,
         status: 'pending',
+        notes,
       };
       setDb(prev => ({ ...prev, followUps: [entry, ...(prev.followUps || [])] }));
-      logAction?.('Added follow-up', 'followup', form.clientName);
+      logAction?.('Added follow-up', 'followup', meta.clientName);
+      setPanel(null);
     } else {
-      updateFU(modal.data.id, form);
-      logAction?.('Edited follow-up', 'followup', form.clientName);
+      updateFU(panel.id, meta);
+      logAction?.('Edited follow-up', 'followup', meta.clientName);
+      // keep the panel open so the note history stays visible for continued editing
     }
-    setModal(null);
   };
 
-  // NEW: create a visit from a follow-up card, carrying over the client snapshot
+  // Appends a new note to a follow-up's history without touching older notes.
+  const handleAddNote = (id, text) => {
+    setDb(prev => ({
+      ...prev,
+      followUps: (prev.followUps || []).map(f => {
+        if (f.id !== id) return f;
+        const existing = getNotes(f);
+        const noteEntry = { id: `${Date.now()}`, text, createdAt: new Date().toISOString(), createdBy: myAgentName };
+        return { ...f, notes: [...existing, noteEntry] };
+      }),
+    }));
+    logAction?.('Added note to follow-up', 'followup', id);
+  };
+
   const handleScheduleVisit = (visitForm, alsoComplete) => {
     const fu = visitModalFor;
     const entry = {
@@ -834,6 +977,10 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     logAction?.('Scheduled visit from follow-up', 'visit', fu.clientName);
     setVisitModalFor(null);
   };
+
+  // Always look up the live record so the panel's note history stays in sync
+  // as new notes get added while it's open.
+  const panelFu = panel?.mode === 'edit' ? followUps.find(f => f.id === panel.id) : null;
 
   const emptyCopy = EMPTY_TAB_COPY[viewTab] || EMPTY_TAB_COPY.all;
 
@@ -869,7 +1016,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
               : 'Track and manage your pending client follow-ups. Stay on top of every lead.'}
           </p>
         </div>
-        <button onClick={() => setModal({ mode: 'add' })} style={{
+        <button onClick={() => setPanel({ mode: 'add' })} style={{
           padding: '11px 22px', background: T.primary, color: '#fff',
           border: 'none', borderRadius: T.radiusSm, fontWeight: 700, fontSize: 14,
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
@@ -963,7 +1110,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
                 : 'Try adjusting your search or filter.'}
           </p>
           {followUps.length === 0 && (
-            <button onClick={() => setModal({ mode: 'add' })} style={{
+            <button onClick={() => setPanel({ mode: 'add' })} style={{
               padding: '10px 24px', background: T.primary, color: '#fff',
               border: 'none', borderRadius: T.radiusSm, fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>Add First Follow-up</button>
@@ -976,7 +1123,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
               <FUCard
                 key={fu.id} fu={fu}
                 showAgent={isSuperAdmin}
-                onEdit={data => setModal({ mode: 'edit', data })}
+                onEdit={data => setPanel({ mode: 'edit', id: data.id })}
                 onDelete={handleDelete}
                 onMarkDone={handleMarkDone}
                 onMarkMissed={handleMarkMissed}
@@ -988,12 +1135,14 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
       )}
 
       <AnimatePresence>
-        {modal && (
-          <FollowUpModal
-            initial={modal.data}
+        {panel && (panel.mode === 'add' || panelFu) && (
+          <FollowUpPanel
+            mode={panel.mode}
+            fu={panel.mode === 'edit' ? panelFu : null}
             clients={clients}
-            onSave={handleSave}
-            onClose={() => setModal(null)}
+            onSaveMeta={handleSaveMeta}
+            onAddNote={handleAddNote}
+            onClose={() => setPanel(null)}
           />
         )}
       </AnimatePresence>

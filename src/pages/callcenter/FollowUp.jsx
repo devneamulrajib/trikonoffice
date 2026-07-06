@@ -1131,11 +1131,16 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
                           : <span style={{ fontSize: 11, color: C.textMuted, fontStyle: 'italic' }}>—</span>}
                       </td>
                     )}
+                    {/*
+                      Actions column simplified: a single "Manage" button opens the
+                      detail modal (which already has Call at the top plus Edit,
+                      Mark Done/Missed, and Schedule Visit inside it) and a Delete
+                      button. The separate Call icon was redundant with the modal.
+                    */}
                     <td style={{ padding: '11px 16px', textAlign: 'center', borderBottom: `1px solid ${C.border}99` }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                        <IconAction icon={Phone}   onClick={() => { if (fu.clientPhone) window.location.href = `tel:${fu.clientPhone}`; }} title="Call" variant="success" disabled={!fu.clientPhone} />
-                        <IconAction icon={Pencil}  onClick={() => setDetailTarget(fu)} title="View / Edit" variant="primary" />
-                        <IconAction icon={Trash2}  onClick={() => setDeleteTarget(fu)} title="Delete" variant="danger" />
+                        <IconAction icon={Pencil} onClick={() => setDetailTarget(fu)} title="View / Manage" variant="primary" />
+                        <IconAction icon={Trash2} onClick={() => setDeleteTarget(fu)} title="Delete" variant="danger" />
                       </div>
                     </td>
                   </tr>

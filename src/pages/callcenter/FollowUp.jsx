@@ -28,6 +28,7 @@ const ICONS = {
   done:     "M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3",
   phoneCall:"M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.18 2 2 0 012.22 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z",
   shield:   "M12 2L4 5v5c0 5.25 3.5 10.15 8 11.35C16.5 20.15 20 15.25 20 10V5L12 2z",
+  mapPin:   "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z M12 13a3 3 0 100-6 3 3 0 000 6z",
 };
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -62,7 +63,6 @@ const STATUS_CONFIG = {
   rescheduled:{ label: 'Rescheduled', color: T.info,  bg: '#EFF6FF' },
 };
 
-// Lead status pill colors — matches the 4-option set used on the New Calls page
 const LEAD_STATUS_CONFIG = {
   'Interested':     { color: T.success,  bg: '#ECFDF5' },
   'Not Interested': { color: T.textMuted,bg: '#F8FAFC' },
@@ -70,8 +70,6 @@ const LEAD_STATUS_CONFIG = {
   'Dropped':        { color: T.danger,   bg: '#FEF2F2' },
 };
 
-// Date-based view tabs. "previous" = dueDate < today, "today" = dueDate === today,
-// "upcoming" = dueDate > today, "all" = no date filtering.
 const VIEW_TABS = [
   { key: 'all',      label: 'All' },
   { key: 'previous', label: 'Previous' },
@@ -133,7 +131,6 @@ const Textarea = ({ style, ...props }) => (
   }} />
 );
 
-// ─── Stats row ────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, color, bg }) => (
   <div style={{
     flex: 1, padding: '16px 20px', background: bg || T.surface,
@@ -144,7 +141,6 @@ const StatCard = ({ label, value, color, bg }) => (
   </div>
 );
 
-// ─── View tabs (Previous / Today / Upcoming / All) ────────────────────────────
 const ViewTabs = ({ active, counts, onChange }) => (
   <div style={{ display: 'flex', gap: 4, borderBottom: `1.5px solid ${T.border}`, marginBottom: 20 }}>
     {VIEW_TABS.map(t => {
@@ -174,10 +170,7 @@ const ViewTabs = ({ active, counts, onChange }) => (
   </div>
 );
 
-// ─── Add / Edit Modal ─────────────────────────────────────────────────────────
-// `clients` passed in here is already scoped to what this user is allowed to
-// create follow-ups for (their own clients, or everyone's for Super Admin) —
-// see the filtering done in the main component before this modal is opened.
+// ─── Add / Edit Modal (follow-up) ─────────────────────────────────────────────
 const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
   const [form, setForm] = useState(initial || {
     clientName: '', clientPhone: '', dueDate: '', priority: 'medium',
@@ -211,7 +204,6 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
           background: T.surface, borderRadius: 16, width: '100%', maxWidth: 520,
           boxShadow: '0 24px 80px rgba(0,0,0,0.15)', overflow: 'hidden',
         }}>
-        {/* Modal header */}
         <div style={{ padding: '20px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>
@@ -228,7 +220,6 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
 
         <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Client search */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Client *</div>
             <div style={{ position: 'relative' }}>
@@ -284,13 +275,11 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
             )}
           </div>
 
-          {/* Phone */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Phone</div>
             <Input value={form.clientPhone} onChange={e => set('clientPhone', e.target.value)} placeholder="01XXXXXXXXX" />
           </div>
 
-          {/* Date + Priority */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Due Date *</div>
@@ -306,7 +295,6 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
             </div>
           </div>
 
-          {/* Status (edit only) */}
           {initial && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Status</div>
@@ -319,13 +307,11 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
             </div>
           )}
 
-          {/* Note */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Note</div>
             <Textarea value={form.note} onChange={e => set('note', e.target.value)} placeholder="What to discuss, key points to cover, client preferences…" />
           </div>
 
-          {/* Actions */}
           <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
             <button onClick={onClose} style={{
               flex: 1, padding: '11px 0', border: `1.5px solid ${T.border}`,
@@ -348,7 +334,98 @@ const FollowUpModal = ({ initial, clients, onSave, onClose }) => {
   );
 };
 
-// ─── Call context block (what happened on the last call) ─────────────────────
+// ─── Schedule Visit Modal (NEW) ────────────────────────────────────────────────
+// Compact modal reachable straight from a follow-up card. Pre-fills the client
+// snapshot from the follow-up so the agent doesn't retype anything.
+const ScheduleVisitModal = ({ fu, onSave, onClose }) => {
+  const [form, setForm] = useState({
+    scheduledDate: '', scheduledTime: '',
+    location: fu.location || '', address: fu.address || '',
+    propertyType: fu.propertyType || '', notes: '',
+  });
+  const [alsoComplete, setAlsoComplete] = useState(fu.status === 'pending');
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.scheduledDate) return;
+    onSave(form, alsoComplete);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)',
+      zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        style={{
+          background: T.surface, borderRadius: 16, width: '100%', maxWidth: 460,
+          boxShadow: '0 24px 80px rgba(0,0,0,0.15)', overflow: 'hidden',
+        }}>
+        <div style={{ padding: '20px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>Schedule Visit</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: T.textMuted }}>
+              Book a site visit for <strong>{fu.clientName}</strong>
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer', display: 'flex' }}>
+            <Icon d={ICONS.x} size={16} color={T.textMid} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Date *</div>
+              <Input type="date" value={form.scheduledDate} onChange={e => set('scheduledDate', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Time</div>
+              <Input type="time" value={form.scheduledTime} onChange={e => set('scheduledTime', e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Site Address</div>
+            <Input value={form.address} onChange={e => set('address', e.target.value)} placeholder="Full site address" />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Notes</div>
+            <Textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="What to show, client preferences…" style={{ minHeight: 64 }} />
+          </div>
+
+          {fu.status === 'pending' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.textMid, cursor: 'pointer' }}>
+              <input type="checkbox" checked={alsoComplete} onChange={e => setAlsoComplete(e.target.checked)} />
+              Also mark this follow-up as completed
+            </label>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <button onClick={onClose} style={{
+              flex: 1, padding: '11px 0', border: `1.5px solid ${T.border}`,
+              borderRadius: T.radiusSm, background: T.surface, color: T.textMid,
+              fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            }}>Cancel</button>
+            <button onClick={handleSave} disabled={!form.scheduledDate} style={{
+              flex: 2, padding: '11px 0', border: 'none',
+              borderRadius: T.radiusSm,
+              background: !form.scheduledDate ? '#CBD5E1' : T.primary,
+              color: '#fff', fontWeight: 700, fontSize: 14,
+              cursor: !form.scheduledDate ? 'not-allowed' : 'pointer',
+            }}>
+              Schedule Visit
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// ─── Call context block ────────────────────────────────────────────────────────
 const CallContext = ({ fu, expanded, onToggle }) => {
   const hasCallInfo = fu.callOutcome || fu.callNote || fu.offer || fu.leadStatus;
   const hasClientInfo = fu.email || fu.company || fu.address || fu.location || fu.budgetMin || fu.budgetMax || fu.propertyType || fu.source;
@@ -376,7 +453,6 @@ const CallContext = ({ fu, expanded, onToggle }) => {
           border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          {/* Call outcome / method / lead status row */}
           {(fu.callOutcome || fu.callMethod || fu.leadStatus || fu.offer) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {fu.callOutcome && (
@@ -406,7 +482,6 @@ const CallContext = ({ fu, expanded, onToggle }) => {
             </div>
           )}
 
-          {/* Note from the call log */}
           {fu.callNote && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
@@ -416,7 +491,6 @@ const CallContext = ({ fu, expanded, onToggle }) => {
             </div>
           )}
 
-          {/* Client snapshot */}
           {hasClientInfo && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
@@ -440,13 +514,14 @@ const CallContext = ({ fu, expanded, onToggle }) => {
 };
 
 // ─── Follow-up Card ───────────────────────────────────────────────────────────
-const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) => {
+const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, onScheduleVisit, showAgent }) => {
   const [expanded, setExpanded] = useState(false);
   const [callExpanded, setCallExpanded] = useState(false);
   const pc = PRIORITY_CONFIG[fu.priority] || PRIORITY_CONFIG.medium;
   const sc = STATUS_CONFIG[fu.status] || STATUS_CONFIG.pending;
   const today = new Date().toISOString().slice(0, 10);
   const overdue = fu.status === 'pending' && fu.dueDate < today;
+  const isSiteVisitType = fu.followupType === 'Site Visit';
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -456,11 +531,9 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
         boxShadow: overdue ? '0 0 0 3px #FEE2E2' : 'none',
       }}>
 
-      {/* Priority stripe */}
       <div style={{ height: 3, background: pc.color, width: '100%' }} />
 
       <div style={{ padding: '16px 18px' }}>
-        {/* Top row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
             <div style={{
@@ -496,8 +569,7 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
           </div>
         </div>
 
-        {/* Due date row */}
-        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Icon d={ICONS.calendar} size={14} color={overdue ? T.danger : T.textMuted} />
           <span style={{ fontSize: 13, fontWeight: 600, color: overdue ? T.danger : T.textMid }}>
             {overdue ? '⚠ Overdue · ' : ''}Due {fu.dueDate}
@@ -505,9 +577,17 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
           {fu.followupType && (
             <span style={{ fontSize: 11.5, color: T.textMuted, marginLeft: 4 }}>· {fu.followupType}</span>
           )}
+          {isSiteVisitType && !fu.visitScheduled && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: T.info, background: '#EFF6FF',
+              border: `1px solid ${T.info}30`, borderRadius: 999, padding: '2px 9px', marginLeft: 4,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+              <Icon d={ICONS.mapPin} size={10} color={T.info} /> Site visit requested
+            </span>
+          )}
         </div>
 
-        {/* Note preview */}
         {fu.note && (
           <div style={{
             marginTop: 10, padding: '10px 12px', background: '#F8FAFC',
@@ -523,10 +603,8 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
           }}>{expanded ? 'Show less' : 'Show more'}</button>
         )}
 
-        {/* What happened on the call that created this follow-up */}
         <CallContext fu={fu} expanded={callExpanded} onToggle={() => setCallExpanded(v => !v)} />
 
-        {/* Action buttons */}
         {fu.status === 'pending' && (
           <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => onMarkDone(fu.id)} style={{
@@ -543,12 +621,19 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
             }}>
               <Icon d={ICONS.x} size={13} color={T.danger} /> Missed
             </button>
-            <button onClick={() => onEdit(fu)} style={{
+            <button onClick={() => onScheduleVisit(fu)} style={{
               padding: '8px 16px', background: '#EFF6FF', color: T.info,
               border: `1.5px solid ${T.info}40`, borderRadius: T.radiusSm,
               fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
             }}>
-              <Icon d={ICONS.edit} size={13} color={T.info} /> Edit
+              <Icon d={ICONS.mapPin} size={13} color={T.info} /> Schedule Visit
+            </button>
+            <button onClick={() => onEdit(fu)} style={{
+              padding: '8px 16px', background: '#F1F5F9', color: T.textMid,
+              border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+              fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon d={ICONS.edit} size={13} color={T.textMid} /> Edit
             </button>
             <button onClick={() => onDelete(fu.id)} style={{
               padding: '8px 16px', background: '#FEF2F2', color: T.danger,
@@ -561,9 +646,15 @@ const FUCard = ({ fu, onEdit, onDelete, onMarkDone, onMarkMissed, showAgent }) =
           </div>
         )}
 
-        {/* For non-pending, just show edit/delete */}
         {fu.status !== 'pending' && (
-          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+          <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => onScheduleVisit(fu)} style={{
+              padding: '7px 14px', background: '#EFF6FF', color: T.info,
+              border: `1px solid ${T.info}30`, borderRadius: T.radiusSm,
+              fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <Icon d={ICONS.mapPin} size={13} color={T.info} /> Schedule Visit
+            </button>
             <button onClick={() => onEdit(fu)} style={{
               padding: '7px 14px', background: '#F1F5F9', color: T.textMid,
               border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
@@ -590,21 +681,15 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const allFollowUps = db?.followUps || [];
   const allClients   = db?.clients   || [];
 
-  // ── Ownership scoping ───────────────────────────────────────────────────
   const isSuperAdmin = user?.role === 'superadmin';
   const myAgentId    = user?.id;
   const myAgentName  = user?.name || 'Agent';
 
-  // Follow-ups this user is allowed to see. Super Admin sees everyone's;
-  // everyone else only sees follow-ups tied to them (via agentId, stamped
-  // when the follow-up was created).
   const followUps = useMemo(() => {
     if (isSuperAdmin) return allFollowUps;
     return allFollowUps.filter(f => f.agentId === myAgentId);
   }, [allFollowUps, isSuperAdmin, myAgentId]);
 
-  // Clients this user can pick from when manually adding a follow-up —
-  // their own claimed clients only (Super Admin can pick anyone's).
   const clients = useMemo(() => {
     if (isSuperAdmin) return allClients;
     return allClients.filter(c => c.assignedAgentId === myAgentId);
@@ -614,10 +699,10 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy]       = useState('due_asc');
-  const [viewTab, setViewTab]     = useState('all'); // 'all' | 'previous' | 'today' | 'upcoming'
+  const [viewTab, setViewTab]     = useState('all');
   const [modal, setModal]         = useState(null); // null | { mode: 'add'|'edit', data? }
+  const [visitModalFor, setVisitModalFor] = useState(null); // NEW: follow-up currently scheduling a visit for
 
-  // ── Stats (scoped) ─────────────────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
   const stats = useMemo(() => ({
     total:     followUps.length,
@@ -627,7 +712,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     completed: followUps.filter(f => f.status === 'completed').length,
   }), [followUps, today]);
 
-  // ── Tab counts (date-based, independent of status/priority filters) ────
   const tabCounts = useMemo(() => ({
     all:      followUps.length,
     previous: followUps.filter(f => f.dueDate < today).length,
@@ -635,7 +719,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     upcoming: followUps.filter(f => f.dueDate > today).length,
   }), [followUps, today]);
 
-  // ── Filtered + sorted list ─────────────────────────────────────────────
   const visible = useMemo(() => {
     let list = [...followUps];
 
@@ -667,14 +750,12 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     return list;
   }, [followUps, search, filterStatus, filterPriority, sortBy, viewTab, today]);
 
-  // ── Tab change: also nudge sort order to whatever's most useful ────────
   const handleTabChange = (key) => {
     setViewTab(key);
-    if (key === 'previous') setSortBy('due_desc'); // most recently passed first
-    else if (key === 'upcoming') setSortBy('due_asc'); // soonest first
+    if (key === 'previous') setSortBy('due_desc');
+    else if (key === 'upcoming') setSortBy('due_asc');
   };
 
-  // ── Actions ────────────────────────────────────────────────────────────
   const updateFU = (id, patch) => {
     setDb(prev => ({
       ...prev,
@@ -707,8 +788,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         ...form,
         id: Date.now(),
         createdAt: new Date().toISOString(),
-        // Always stamped from the logged-in user — never selectable — so a
-        // follow-up always has a clear, provable owner.
         agentId: myAgentId,
         agentName: myAgentName,
         createdBy: myAgentName,
@@ -717,11 +796,43 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
       setDb(prev => ({ ...prev, followUps: [entry, ...(prev.followUps || [])] }));
       logAction?.('Added follow-up', 'followup', form.clientName);
     } else {
-      // Editing never changes ownership — keep the original agentId/agentName.
       updateFU(modal.data.id, form);
       logAction?.('Edited follow-up', 'followup', form.clientName);
     }
     setModal(null);
+  };
+
+  // NEW: create a visit from a follow-up card, carrying over the client snapshot
+  const handleScheduleVisit = (visitForm, alsoComplete) => {
+    const fu = visitModalFor;
+    const entry = {
+      clientName: fu.clientName,
+      clientPhone: fu.clientPhone,
+      propertyType: visitForm.propertyType || fu.propertyType || '',
+      location: visitForm.location || fu.location || '',
+      address: visitForm.address || fu.address || '',
+      scheduledDate: visitForm.scheduledDate,
+      scheduledTime: visitForm.scheduledTime,
+      notes: visitForm.notes,
+      status: 'upcoming',
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      agentId: myAgentId,
+      agentName: myAgentName,
+      createdBy: myAgentName,
+      source: 'followup',
+      followUpId: fu.id,
+    };
+    setDb(prev => ({
+      ...prev,
+      visits: [entry, ...(prev.visits || [])],
+      followUps: (prev.followUps || []).map(f => f.id === fu.id
+        ? { ...f, visitScheduled: true, ...(alsoComplete ? { status: 'completed', completedAt: new Date().toISOString() } : {}) }
+        : f
+      ),
+    }));
+    logAction?.('Scheduled visit from follow-up', 'visit', fu.clientName);
+    setVisitModalFor(null);
   };
 
   const emptyCopy = EMPTY_TAB_COPY[viewTab] || EMPTY_TAB_COPY.all;
@@ -729,7 +840,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
 
-      {/* Back to Call Center */}
       {typeof setView === 'function' && (
         <button onClick={() => setView('call_center')} style={{
           display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none',
@@ -740,7 +850,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         </button>
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -769,7 +878,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         </button>
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <StatCard label="Total" value={stats.total} color={T.text} />
         <StatCard label="Pending" value={stats.pending} color={T.warning} bg="#FFFBEB" />
@@ -778,18 +886,14 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         <StatCard label="Completed" value={stats.completed} color={T.success} bg="#ECFDF5" />
       </div>
 
-      {/* View tabs: Previous / Today / Upcoming / All */}
       <ViewTabs active={viewTab} counts={tabCounts} onChange={handleTabChange} />
 
-      {/* Filters bar */}
       <div style={{
         background: T.surface, border: `1px solid ${T.border}`,
         borderRadius: T.radius, padding: '14px 18px', marginBottom: 20,
         display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
       }}>
-        {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Icon d={ICONS.search} size={15} color={T.textMuted} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -806,7 +910,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
           </div>
         </div>
 
-        {/* Status filter */}
         <div style={{ display: 'flex', gap: 6 }}>
           {['all','pending','completed','missed','rescheduled'].map(s => (
             <Pill key={s} active={filterStatus === s} color={T.primary}
@@ -816,7 +919,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
           ))}
         </div>
 
-        {/* Priority filter */}
         <div style={{ display: 'flex', gap: 6 }}>
           {['all','high','medium','low'].map(p => (
             <Pill key={p}
@@ -828,7 +930,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
           ))}
         </div>
 
-        {/* Sort */}
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
           padding: '9px 12px', border: `1.5px solid ${T.border}`,
           borderRadius: T.radiusSm, fontSize: 13.5, color: T.textMid,
@@ -841,7 +942,6 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         </select>
       </div>
 
-      {/* List */}
       {visible.length === 0 ? (
         <div style={{
           textAlign: 'center', padding: '60px 20px',
@@ -880,13 +980,13 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
                 onDelete={handleDelete}
                 onMarkDone={handleMarkDone}
                 onMarkMissed={handleMarkMissed}
+                onScheduleVisit={setVisitModalFor}
               />
             ))}
           </AnimatePresence>
         </div>
       )}
 
-      {/* Modal */}
       <AnimatePresence>
         {modal && (
           <FollowUpModal
@@ -894,6 +994,16 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
             clients={clients}
             onSave={handleSave}
             onClose={() => setModal(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {visitModalFor && (
+          <ScheduleVisitModal
+            fu={visitModalFor}
+            onSave={handleScheduleVisit}
+            onClose={() => setVisitModalFor(null)}
           />
         )}
       </AnimatePresence>

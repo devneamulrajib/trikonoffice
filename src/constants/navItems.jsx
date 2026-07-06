@@ -3,15 +3,9 @@ import {
   Layout, Plus, Wallet, ListFilter, ClipboardList,
   CreditCard, Layers, History, ShieldCheck,
   Settings as SettingsIcon,
-  Headphones, Phone, PhoneCall, ArrowLeftRight,
+  Headphones, Phone, PhoneCall, MapPin, ArrowLeftRight,
   BookOpen, Users, Table2, Upload, UserPlus
 } from 'lucide-react';
-
-// ─── HOW PERMISSIONS WORK ─────────────────────────────────────────────────────
-// roles: 'superadmin'  → only superadmin can see it (never assignable to users)
-// roles: 'all'         → every logged-in user sees it, gated by permKey (if present)
-// hideFor: ['role1']   → explicitly hidden for these role values, regardless of permKey
-// Dashboard has no permKey → always visible to everyone EXCEPT roles in hideFor.
 
 const NAVITEMS = [
   { id: 'dashboard',      icon: <Layout        size={18} />, label: 'Dashboard',       roles: 'all', hideFor: ['call_center'] },
@@ -49,6 +43,7 @@ const NAVITEMS = [
     children: [
       { id: 'cc_new_call',  icon: <Phone     size={16} />, label: 'New Call',  roles: 'all', permKey: 'cc_new_call'  },
       { id: 'cc_follow_up', icon: <PhoneCall size={16} />, label: 'Follow Up', roles: 'all', permKey: 'cc_follow_up' },
+      { id: 'cc_visit',     icon: <MapPin    size={16} />, label: 'Visit',     roles: 'all', permKey: 'cc_visit'     },
     ],
   },
   { id: 'cc_transfer',  icon: <ArrowLeftRight size={18} />, label: 'Client Transfer Request', roles: 'all', permKey: 'cc_transfer'  },

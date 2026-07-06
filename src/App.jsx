@@ -25,6 +25,7 @@ import ManageUsers     from './pages/ManageUsers';
 import CallCenterHub   from './pages/callcenter/CallCenterHub';
 import NewCall         from './pages/callcenter/NewCall';
 import FollowUp        from './pages/callcenter/FollowUp';
+import Visit           from './pages/callcenter/Visit';
 import TransferRequest from './pages/callcenter/TransferRequest';
 import Comments        from './pages/callcenter/Comments';
 import CallLogs        from './pages/callcenter/CallLogs';
@@ -51,6 +52,7 @@ const DEFAULT_DB = {
   callLogs:         [],
   callQueue:        [],
   followUps:        [],
+  visits:           [],
   transferRequests: [],
   ccComments:       [],
   requirements:     [],
@@ -74,6 +76,7 @@ const VIEW_PERM_MAP = {
   call_center:      'call_center',
   cc_new_call:      'cc_new_call',
   cc_follow_up:     'cc_follow_up',
+  cc_visit:         'cc_visit',
   cc_transfer:      'cc_transfer',
   cc_comments:      'cc_comments',
   cc_call_logs:     'cc_call_logs',
@@ -225,8 +228,8 @@ const ClearSuite = () => {
   // NOTE: `clients` is deliberately stripped out of this payload — clients
   // now live in their own DB table (see /api/clients routes) so that taking
   // a call can be an atomic, race-free operation. Only everything else
-  // (expenses, budgets, call logs, follow-ups, etc.) still goes through the
-  // single JSON blob.
+  // (expenses, budgets, call logs, follow-ups, visits, etc.) still goes
+  // through the single JSON blob.
   const syncToServer = useCallback(() => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
@@ -549,6 +552,7 @@ const ClearSuite = () => {
           {!isViewForbidden && view === 'call_center'     && <CallCenterHub   key="cch" setView={safeSetView} />}
           {!isViewForbidden && view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
           {!isViewForbidden && view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
+          {!isViewForbidden && view === 'cc_visit'        && <Visit           key="cc7" {...ccProps} />}
           {!isViewForbidden && view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
           {!isViewForbidden && view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
           {!isViewForbidden && view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}

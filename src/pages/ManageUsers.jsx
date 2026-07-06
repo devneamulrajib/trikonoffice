@@ -28,6 +28,7 @@ const ALL_SECTIONS = [
   { key: 'call_center',     label: 'My Center',               group: 'Call Center' },
   { key: 'cc_new_call',     label: 'New Call',                group: 'Call Center' },
   { key: 'cc_follow_up',    label: 'Follow Up',               group: 'Call Center' },
+  { key: 'cc_visit',        label: 'Visit',                   group: 'Call Center' },
   { key: 'cc_transfer',     label: 'Client Transfer Request', group: 'Call Center' },
   { key: 'cc_call_logs',    label: 'Call Logs',               group: 'Call Center' },
 ];

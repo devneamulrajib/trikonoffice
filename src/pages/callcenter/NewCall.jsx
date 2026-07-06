@@ -6,7 +6,7 @@ import {
   Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
   ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, XCircle,
-  ShieldCheck, Lock,
+  ShieldCheck, Lock, Check, EyeOff,
 } from 'lucide-react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -86,7 +86,8 @@ const LEAD_STATUSES = [
 // Only Call / WhatsApp as contact method
 const CONTACT_METHODS = ['Call','WhatsApp'];
 
-// Offer discussed options (with "Other" as a free-text option)
+// Offer discussed options (with "Other" as a free-text option).
+// NOTE: this is now a MULTI-select set — an agent can tick more than one.
 const OFFER_OPTIONS = [
   { value:'projects',  label:'Projects' },
   { value:'land_flat', label:'Land / Flat Plan' },
@@ -115,6 +116,16 @@ const AVATAR_PALETTE = [
   ['#CCFBF1','#0F766E'],['#FAE8FF','#7E22CE'],
 ];
 const hashStr = s => { let h=0; for(let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; };
+
+// Masks a phone number for display: keeps the first 5 digits visible and
+// replaces the rest with a star per remaining character. Non-digit
+// characters (spaces, dashes, +) are preserved as-is in the visible prefix.
+const maskPhone = (phone) => {
+  const str = String(phone || '').trim();
+  if (!str) return '';
+  if (str.length <= 5) return str;
+  return str.slice(0, 5) + '•'.repeat(str.length - 5);
+};
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 const Avatar = ({ name, size=32 }) => {
@@ -360,6 +371,45 @@ const MethodPicker = ({ value, onChange }) => (
     })}
   </div>
 );
+
+// Multi-select pill group for "Offer discussed". `value` is an array of
+// selected OFFER_OPTIONS values (e.g. ['projects','site_visit']). Clicking a
+// pill toggles it in/out of the array — any number of offers can be active
+// at once. A small checkmark badge shows on selected pills.
+const OfferMultiPicker = ({ value, onChange }) => {
+  const selected = Array.isArray(value) ? value : [];
+  const toggle = (v) => {
+    if (selected.includes(v)) onChange(selected.filter(x => x !== v));
+    else onChange([...selected, v]);
+  };
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+      {OFFER_OPTIONS.map(o => {
+        const active = selected.includes(o.value);
+        return (
+          <button key={o.value} type="button" onClick={()=>toggle(o.value)} style={{
+            display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px',
+            borderRadius:C.r.full, border:`1.5px solid ${active?C.accent:C.border}`,
+            background:active?C.accentLight:C.surface,
+            color:active?C.accentDark:C.textMid, fontSize:12.5,
+            fontWeight:active?700:500, cursor:'pointer', transition:'all .13s',
+          }}>
+            <span style={{
+              width:16, height:16, borderRadius:4, flexShrink:0,
+              border:`1.5px solid ${active?C.accentDark:C.borderStrong}`,
+              background:active?C.accentDark:'transparent',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              transition:'all .13s',
+            }}>
+              {active && <Check size={11} color="#fff" strokeWidth={3}/>}
+            </span>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const Grid = ({ cols='1fr 1fr', gap=13, children, style }) => (
   <div style={{ display:'grid', gridTemplateColumns:cols, gap, ...style }}>{children}</div>
@@ -641,11 +691,44 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
 // ─── Take Call Modal ──────────────────────────────────────────────────────────
 const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
   const [fuOn, setFuOn] = useState(Boolean(lead.followupDate));
+  const [attempted, setAttempted] = useState(false); // becomes true after a failed "Log call" click
   const toggleFu = () => { const n=!fuOn; setFuOn(n); if(!n) onChange('followupDate',''); };
   const reqSummary = [lead.reqLand,lead.reqFlat,lead.reqFacing].filter(Boolean).join(' · ');
   const telLink = lead.phone ? `tel:${lead.phone}` : null;
   const waLink  = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g,'')}` : null;
-  const ready   = Boolean(lead.coStatus);
+
+  // Offers is now an array of selected OFFER_OPTIONS values (multi-select).
+  const selectedOffers = Array.isArray(lead.offers) ? lead.offers : [];
+  const hasOther = selectedOffers.includes('other');
+
+  // ── Section-by-section validation ──────────────────────────────────────
+  // Every section must be filled before the agent can log the call. Notes
+  // and follow-up fields count as "filled" only once they have non-whitespace
+  // content — an empty textarea doesn't satisfy the requirement.
+  const missing = {
+    outcome:    !lead.coStatus,
+    leadStatus: !lead.callStatus,
+    notes:      !lead.coComment?.trim(),
+    offer:      selectedOffers.length === 0 || (hasOther && !lead.offersOther?.trim()),
+    fuDate:     fuOn && !lead.followupDate,
+    fuNote:     fuOn && !lead.followupNote?.trim(),
+  };
+  const missingLabels = [
+    missing.outcome    && 'Call outcome',
+    missing.leadStatus && 'Lead status',
+    missing.notes      && 'Notes from this call',
+    missing.offer      && 'Offer discussed',
+    missing.fuDate      && 'Follow-up date',
+    missing.fuNote      && 'Follow-up note',
+  ].filter(Boolean);
+  const ready = missingLabels.length === 0;
+
+  const handleSubmitClick = () => {
+    if (!ready) { setAttempted(true); return; }
+    onSubmit();
+  };
+
+  const errBox = { borderColor: C.red, boxShadow: `0 0 0 3px ${C.red}18` };
 
   // Auto-enable the follow-up scheduler when lead status is set to "Followup"
   useEffect(() => {
@@ -728,47 +811,58 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
 
           <Grid cols="1fr 1fr" gap={16}>
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              <Card>
-                <CardHeader icon={PhoneCall} title="Call outcome" subtitle="What happened when you called"/>
+              <Card style={attempted && missing.outcome ? errBox : {}}>
+                <CardHeader icon={PhoneCall} title="Call outcome *" subtitle="What happened when you called"/>
                 <div style={{ marginBottom:14 }}>
                   <OutcomePicker value={lead.coStatus||''} onChange={v=>onChange('coStatus',v)}/>
+                  {attempted && missing.outcome && (
+                    <div style={{ fontSize:11.5, color:C.red, marginTop:6 }}>Please select a call outcome.</div>
+                  )}
                 </div>
                 <div style={{ marginBottom:14 }}>
                   <FieldLabel>Method used</FieldLabel>
                   <MethodPicker value={lead.coMethod||'Call'} onChange={v=>onChange('coMethod',v)}/>
                 </div>
-                <FieldLabel>Notes from this call</FieldLabel>
+                <FieldLabel required>Notes from this call</FieldLabel>
                 <Textarea value={lead.coComment||''} onChange={e=>onChange('coComment',e.target.value)}
-                  placeholder="What was discussed, client's reaction, key details…"/>
+                  placeholder="What was discussed, client's reaction, key details…"
+                  style={attempted && missing.notes ? errBox : {}}/>
+                {attempted && missing.notes && (
+                  <div style={{ fontSize:11.5, color:C.red, marginTop:6 }}>Notes are required before you can log this call.</div>
+                )}
               </Card>
 
-              <Card>
-                <CardHeader icon={Gift} title="Offer discussed" subtitle={`Property: ${lead.propertyType||'—'}`}/>
-                <Select value={lead.offers||''} onChange={e=>{
-                  const v = e.target.value;
-                  onChange('offers', v);
-                  if (v !== 'other') onChange('offersOther','');
-                }}>
-                  <option value="">None selected</option>
-                  {OFFER_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-                {lead.offers === 'other' && (
-                  <div style={{ marginTop:10 }}>
-                    <FieldLabel>Specify offer</FieldLabel>
+              <Card style={attempted && missing.offer ? errBox : {}}>
+                <CardHeader icon={Gift} title="Offer discussed *" subtitle={`Property: ${lead.propertyType||'—'} — select all that apply`}/>
+                <OfferMultiPicker value={selectedOffers} onChange={v=>onChange('offers', v)}/>
+                {hasOther && (
+                  <div style={{ marginTop:12 }}>
+                    <FieldLabel required>Specify offer</FieldLabel>
                     <Input value={lead.offersOther||''} onChange={e=>onChange('offersOther',e.target.value)}
-                      placeholder="Describe the offer discussed…"/>
+                      placeholder="Describe the offer discussed…"
+                      style={attempted && missing.offer ? errBox : {}}/>
+                  </div>
+                )}
+                {attempted && missing.offer && (
+                  <div style={{ fontSize:11.5, color:C.red, marginTop:8 }}>
+                    {selectedOffers.length === 0
+                      ? 'Please select at least one offer that was discussed.'
+                      : 'Please specify the offer.'}
                   </div>
                 )}
               </Card>
             </div>
 
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              <Card>
-                <CardHeader icon={CheckCircle2} title="Lead status" subtitle="Update after this call"/>
+              <Card style={attempted && missing.leadStatus ? errBox : {}}>
+                <CardHeader icon={CheckCircle2} title="Lead status *" subtitle="Update after this call"/>
                 <LeadStatusPicker value={lead.callStatus||''} onChange={v=>onChange('callStatus',v)}/>
+                {attempted && missing.leadStatus && (
+                  <div style={{ fontSize:11.5, color:C.red, marginTop:8 }}>Please choose a lead status.</div>
+                )}
               </Card>
 
-              <Card style={{ background:fuOn?'#FFFDF7':C.surface }}>
+              <Card style={{ background:fuOn?'#FFFDF7':C.surface, ...((attempted && fuOn && (missing.fuDate||missing.fuNote)) ? errBox : {}) }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:fuOn?16:0 }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
                     <div style={{ width:32, height:32, borderRadius:C.r.sm,
@@ -790,8 +884,9 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                       exit={{opacity:0,height:0}} style={{overflow:'hidden'}}>
                       <Grid>
                         <div>
-                          <FieldLabel>Date</FieldLabel>
-                          <Input type="date" value={lead.followupDate||''} onChange={e=>onChange('followupDate',e.target.value)}/>
+                          <FieldLabel required>Date</FieldLabel>
+                          <Input type="date" value={lead.followupDate||''} onChange={e=>onChange('followupDate',e.target.value)}
+                            style={attempted && missing.fuDate ? errBox : {}}/>
                         </div>
                         <div>
                           <FieldLabel>Type</FieldLabel>
@@ -801,10 +896,15 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                         </div>
                       </Grid>
                       <div style={{ marginTop:12 }}>
-                        <FieldLabel>Follow-up note</FieldLabel>
+                        <FieldLabel required>Follow-up note</FieldLabel>
                         <Textarea value={lead.followupNote||''} onChange={e=>onChange('followupNote',e.target.value)}
-                          placeholder="What to discuss on the next call…" style={{ minHeight:64 }}/>
+                          placeholder="What to discuss on the next call…" style={{ minHeight:64, ...(attempted && missing.fuNote ? errBox : {}) }}/>
                       </div>
+                      {attempted && (missing.fuDate || missing.fuNote) && (
+                        <div style={{ fontSize:11.5, color:C.red, marginTop:6 }}>
+                          A follow-up date and note are required once scheduling is turned on.
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -825,15 +925,22 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
         <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
           borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0, zIndex:10,
           display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
-          <div style={{ fontSize:13, color:ready?C.green:C.textMuted, display:'flex', alignItems:'center', gap:6 }}>
-            {ready
-              ? <><CheckCircle2 size={14} color={C.green}/> Ready — logging as <strong>{lead.coStatus}</strong></>
-              : <>Pick a call outcome to continue</>
-            }
+          <div style={{ fontSize:13, color:ready?C.green:C.red, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+            {ready ? (
+              <><CheckCircle2 size={14} color={C.green}/> Ready — logging as <strong>&nbsp;{lead.coStatus}</strong></>
+            ) : attempted ? (
+              <><AlertCircle size={14} color={C.red}/>
+                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  Missing: {missingLabels.join(', ')}
+                </span>
+              </>
+            ) : (
+              <>Fill in every section to log this call</>
+            )}
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <GhostBtn onClick={onClose}>Close</GhostBtn>
-            <PrimaryBtn onClick={onSubmit}>
+            <PrimaryBtn onClick={handleSubmitClick}>
               {fuOn ? 'Log call & schedule follow-up' : 'Log call'}
               <ArrowRight size={14}/>
             </PrimaryBtn>
@@ -954,7 +1061,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
 
   const openTakeCall = lead => setActiveLead({
     ...lead, coComment:'', coStatus:'', coMethod:'Call',
-    offers:'', offersOther:'',
+    offers:[], offersOther:'',
     followupDate:'', followupType:'Regular',
     followupNote:'', callStatus:'',
   });
@@ -985,9 +1092,14 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     if (!activeLead) return;
     const now = new Date().toISOString();
 
-    const offerLabel = activeLead.offers === 'other'
-      ? (activeLead.offersOther || 'Other')
-      : (OFFER_OPTIONS.find(o=>o.value===activeLead.offers)?.label || '');
+    // Build a human-readable offer label from the (possibly multiple)
+    // selected offers, e.g. "Projects, Free Site Visit, Cash discount".
+    const selectedOffers = Array.isArray(activeLead.offers) ? activeLead.offers : [];
+    const offerLabel = selectedOffers
+      .map(v => v === 'other'
+        ? (activeLead.offersOther || 'Other')
+        : (OFFER_OPTIONS.find(o=>o.value===v)?.label || v))
+      .join(', ');
 
     const entry = {
       id:Date.now(), clientId:activeLead.id, clientName:activeLead.name, phone:activeLead.phone,
@@ -1303,6 +1415,17 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                 const srcColor = SOURCE_ACCENT[item.source] || C.textMuted;
                 const hovered  = hoveredRow === item.id;
                 const claimedByOther = isSuperAdmin && item.assignedAgentId && item.assignedAgentId !== myAgentId;
+
+                // ── Phone visibility ────────────────────────────────────
+                // A phone number is only shown in full once THIS agent has
+                // taken the call (i.e. the client is assigned to them), or
+                // for Super Admin who can see everything. Otherwise it's
+                // masked: first 5 digits visible, the rest replaced with •.
+                const canSeeFullPhone = isSuperAdmin || isMine(item);
+                const displayPhone = item.phone
+                  ? (canSeeFullPhone ? item.phone : maskPhone(item.phone))
+                  : null;
+
                 return (
                   <tr key={item.id}
                     onMouseEnter={()=>setHoveredRow(item.id)}
@@ -1332,7 +1455,18 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                       borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                      {item.phone || <span style={{ color:C.textMuted }}>—</span>}
+                      {displayPhone ? (
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontFamily: canSeeFullPhone ? 'inherit' : 'monospace', letterSpacing: canSeeFullPhone ? 'normal' : '1px' }}>
+                            {displayPhone}
+                          </span>
+                          {!canSeeFullPhone && (
+                            <EyeOff size={12} style={{ color:C.textMuted, flexShrink:0 }} title="Take the call to reveal full number"/>
+                          )}
+                        </span>
+                      ) : (
+                        <span style={{ color:C.textMuted }}>—</span>
+                      )}
                     </td>
                     <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                       borderBottom:`1px solid ${C.border}99` }}>

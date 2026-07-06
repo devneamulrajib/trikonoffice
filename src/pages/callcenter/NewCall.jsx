@@ -83,6 +83,13 @@ const LEAD_STATUSES = [
   { value:'Dropped',        color: C.red,    bg: C.redBg    },
 ];
 
+// Priority levels for scheduled follow-ups (matches FollowUp.jsx's High/Medium/Low)
+const PRIORITY_LEVELS = [
+  { value:'high',   label:'High',   color: C.red,    bg: C.redBg    },
+  { value:'medium', label:'Medium', color: C.yellow, bg: C.yellowBg },
+  { value:'low',    label:'Low',    color: C.green,  bg: C.greenBg  },
+];
+
 // Only Call / WhatsApp as contact method
 const CONTACT_METHODS = ['Call','WhatsApp'];
 
@@ -347,6 +354,28 @@ const LeadStatusPicker = ({ value, onChange }) => (
           fontWeight:active?700:500, cursor:'pointer', transition:'all .13s',
         }}>
           {s.value}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// Priority picker (High / Medium / Low) — same visual language as
+// LeadStatusPicker, used to set the priority saved onto a scheduled
+// follow-up so it shows correctly on the Follow-up page.
+const PriorityPicker = ({ value, onChange }) => (
+  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+    {PRIORITY_LEVELS.map(p => {
+      const active = value === p.value;
+      return (
+        <button key={p.value} onClick={()=>onChange(p.value)} style={{
+          padding:'6px 13px', borderRadius:C.r.full,
+          border:`1.5px solid ${active?p.color:C.border}`,
+          background:active?p.bg:C.surface,
+          color:active?p.color:C.textMid, fontSize:12.5,
+          fontWeight:active?700:500, cursor:'pointer', transition:'all .13s',
+        }}>
+          {p.label}
         </button>
       );
     })}
@@ -896,6 +925,10 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
                         </div>
                       </Grid>
                       <div style={{ marginTop:12 }}>
+                        <FieldLabel>Priority</FieldLabel>
+                        <PriorityPicker value={lead.priority||'medium'} onChange={v=>onChange('priority', v)} />
+                      </div>
+                      <div style={{ marginTop:12 }}>
                         <FieldLabel required>Follow-up note</FieldLabel>
                         <Textarea value={lead.followupNote||''} onChange={e=>onChange('followupNote',e.target.value)}
                           placeholder="What to discuss on the next call…" style={{ minHeight:64, ...(attempted && missing.fuNote ? errBox : {}) }}/>
@@ -1062,7 +1095,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   const openTakeCall = lead => setActiveLead({
     ...lead, coComment:'', coStatus:'', coMethod:'Call',
     offers:[], offersOther:'',
-    followupDate:'', followupType:'Regular',
+    followupDate:'', followupType:'Regular', priority:'medium',
     followupNote:'', callStatus:'',
   });
 
@@ -1141,7 +1174,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           subject:activeLead.followupNote?.trim()||`${activeLead.propertyType||'Lead'} follow-up`,
           note:activeLead.followupNote||'',
           dueDate:activeLead.followupDate,
-          priority:followupPriorityMap[activeLead.followupType]||'medium',
+          priority: activeLead.priority || followupPriorityMap[activeLead.followupType] || 'medium',
           followupType:activeLead.followupType||'Regular',
           status:'pending', createdBy: myAgentName,
           agentId: myAgentId, agentName: myAgentName,

@@ -1128,6 +1128,142 @@ const DividerLabel = ({ children }) => (
   </div>
 );
 
+// ─── Secondary list table (Calls Logged / Follow-ups / Closed / Dropped) ─────
+// Rendered when a stat box other than "In Queue" is active — reuses the
+// table visual language but with columns tailored to the selected dataset,
+// so clicking a metric behaves like it does in ManageClients / FollowUp.
+const SECONDARY_EMPTY = {
+  logged:    { icon: PhoneCall,     title:'No calls logged yet',    body:'Calls you log from the queue will show up here.' },
+  followups: { icon: CalendarClock, title:'No follow-ups yet',      body:'Follow-ups scheduled while logging a call will show up here.' },
+  closed:    { icon: CheckCheck,    title:'No closed clients yet',  body:'Clients marked Closed after a call will show up here.' },
+  dropped:   { icon: XCircle,       title:'No dropped clients yet', body:'Clients marked Dropped / Lost after a call will show up here.' },
+};
+
+const SecondaryTable = ({ statView, items, isSuperAdmin }) => {
+  const columns = useMemo(() => {
+    if (statView === 'logged') return [
+      { key:'client',  label:'Client' },
+      { key:'phone',   label:'Phone' },
+      { key:'outcome', label:'Outcome' },
+      { key:'status',  label:'Lead status' },
+      { key:'offer',   label:'Offer' },
+      { key:'date',    label:'Date' },
+      ...(isSuperAdmin ? [{ key:'agent', label:'Agent' }] : []),
+    ];
+    if (statView === 'followups') return [
+      { key:'client',   label:'Client' },
+      { key:'phone',    label:'Phone' },
+      { key:'due',      label:'Due date' },
+      { key:'priority', label:'Priority' },
+      { key:'status',   label:'Status' },
+      ...(isSuperAdmin ? [{ key:'agent', label:'Agent' }] : []),
+    ];
+    // closed / dropped
+    return [
+      { key:'client',   label:'Client' },
+      { key:'phone',    label:'Phone' },
+      { key:'property', label:'Property' },
+      { key:'budget',   label:'Budget' },
+      { key:'location', label:'Location' },
+      { key:'date',     label:'Updated' },
+      ...(isSuperAdmin ? [{ key:'agent', label:'Agent' }] : []),
+    ];
+  }, [statView, isSuperAdmin]);
+
+  const empty = SECONDARY_EMPTY[statView] || SECONDARY_EMPTY.logged;
+
+  const renderCell = (row, key) => {
+    switch (key) {
+      case 'client':
+        return (
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <Avatar name={row.name || row.clientName} size={30}/>
+            <span style={{ fontSize:13.5, fontWeight:600, color:C.text }}>{row.name || row.clientName}</span>
+          </div>
+        );
+      case 'phone':
+        return row.phone || row.clientPhone || <span style={{ color:C.textMuted }}>—</span>;
+      case 'outcome': {
+        const o = CALL_OUTCOMES.find(x => x.value === row.callOutcome);
+        return row.callOutcome ? <Tag label={row.callOutcome} color={o?.color} bg={o?.bg} border={o?.border}/> : <span style={{ color:C.textMuted }}>—</span>;
+      }
+      case 'status': {
+        if (statView === 'logged') {
+          const s = LEAD_STATUSES.find(x => x.value === row.callStatus);
+          return row.callStatus ? <Tag label={row.callStatus} color={s?.color} bg={s?.bg}/> : <span style={{ color:C.textMuted }}>—</span>;
+        }
+        const cfg = { pending:{color:C.yellow,bg:C.yellowBg}, completed:{color:C.green,bg:C.greenBg}, missed:{color:C.red,bg:C.redBg}, rescheduled:{color:C.blue,bg:C.blueBg} }[row.status];
+        return <Tag label={row.status || '—'} color={cfg?.color} bg={cfg?.bg}/>;
+      }
+      case 'offer':
+        return row.offer || <span style={{ color:C.textMuted }}>—</span>;
+      case 'date':
+        return row.date
+          ? new Date(row.date).toLocaleDateString()
+          : (row.calledAt ? new Date(row.calledAt).toLocaleDateString() : <span style={{ color:C.textMuted }}>—</span>);
+      case 'due':
+        return row.dueDate || <span style={{ color:C.textMuted }}>—</span>;
+      case 'priority': {
+        const p = PRIORITY_LEVELS.find(x => x.value === row.priority);
+        return row.priority ? <Tag label={p?.label || row.priority} color={p?.color} bg={p?.bg}/> : <span style={{ color:C.textMuted }}>—</span>;
+      }
+      case 'property':
+        return row.propertyType || <span style={{ color:C.textMuted }}>—</span>;
+      case 'budget':
+        return (row.budgetMin || row.budgetMax) ? `${row.budgetMin||'0'} – ${row.budgetMax||'0'}` : <span style={{ color:C.textMuted }}>—</span>;
+      case 'location':
+        return row.location || <span style={{ color:C.textMuted }}>—</span>;
+      case 'agent':
+        return (row.agentName || row.assignedAgentName)
+          ? <Tag label={row.agentName || row.assignedAgentName} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
+          : <span style={{ color:C.textMuted, fontStyle:'italic', fontSize:11 }}>—</span>;
+      default:
+        return '—';
+    }
+  };
+
+  return (
+    <div style={{ overflowX:'auto' }}>
+      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <thead>
+          <tr style={{ background:C.surfaceRaised }}>
+            {columns.map(col => (
+              <th key={col.key} style={{ textAlign:'left', padding:'10px 16px', fontSize:10.5, fontWeight:700,
+                color:C.textMuted, textTransform:'uppercase', letterSpacing:'.07em',
+                borderBottom:`1.5px solid ${C.border}`, whiteSpace:'nowrap' }}>
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} style={{ padding:'60px 20px', textAlign:'center', color:C.textMuted }}>
+                <div style={{ width:48, height:48, borderRadius:'50%', background:C.surfaceRaised,
+                  display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>
+                  <empty.icon size={22} style={{ opacity:.4 }}/>
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.textMid, marginBottom:4 }}>{empty.title}</div>
+                <div style={{ fontSize:12.5, opacity:.7 }}>{empty.body}</div>
+              </td>
+            </tr>
+          ) : items.map((row, i) => (
+            <tr key={row.id} style={{ background:i%2 ? C.surfaceRaised : 'transparent' }}>
+              {columns.map(col => (
+                <td key={col.key} style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                  borderBottom:`1px solid ${C.border}99` }}>
+                  {renderCell(row, col.key)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteClient, logCallOnClient }) => {
   const [search,       setSearch]       = useState('');
@@ -1142,6 +1278,9 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hoveredRow,   setHoveredRow]   = useState(null);
   const [claimError,   setClaimError]   = useState(null);
+  // Which stat box is currently driving the table below. 'queue' is the
+  // default (uncalled leads); the other 4 mirror the dashboard metrics.
+  const [statView,     setStatView]     = useState('queue');
 
   const allClients = db?.clients  || [];
   const callLogs   = db?.callLogs  || [];
@@ -1208,7 +1347,50 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     return { total: queue.length, callsLogged, followupsSent, closedLeads, droppedLeads, bySource };
   }, [queue, myClients, myCallLogs, myFollowUps]);
 
-  // ── Filtered table list ────────────────────────────────────────────────────
+  // ── Secondary stat-box datasets ─────────────────────────────────────────
+  // Clicking Calls Logged / Follow-ups / Closed / Dropped swaps the table
+  // below to show that dataset instead of the queue (mirrors the clickable
+  // stat boxes already used in ManageClients and FollowUp).
+  const loggedList = useMemo(() => {
+    let list = myCallLogs;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(l =>
+        l.clientName?.toLowerCase().includes(q) || l.phone?.includes(q) ||
+        l.callOutcome?.toLowerCase().includes(q) || l.callStatus?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [myCallLogs, search]);
+
+  const followupsList = useMemo(() => {
+    let list = myFollowUps;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(f => f.clientName?.toLowerCase().includes(q) || f.clientPhone?.includes(q));
+    }
+    return list;
+  }, [myFollowUps, search]);
+
+  const closedList = useMemo(() => {
+    let list = myClients.filter(c => c.status === 'Closed');
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(c => c.name?.toLowerCase().includes(q) || c.phone?.includes(q));
+    }
+    return list;
+  }, [myClients, search]);
+
+  const droppedList = useMemo(() => {
+    let list = myClients.filter(c => c.status === 'Lost');
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(c => c.name?.toLowerCase().includes(q) || c.phone?.includes(q));
+    }
+    return list;
+  }, [myClients, search]);
+
+  // ── Filtered table list (queue view) ───────────────────────────────────────
   const filtered = useMemo(() => {
     let list = sourceFilter === 'All' ? queue : queue.filter(c => c.source === sourceFilter);
     if (typeFilter !== 'All') list = list.filter(c => c.type === typeFilter);
@@ -1228,13 +1410,26 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     return list;
   }, [queue, search, sourceFilter, typeFilter, agentFilter, isSuperAdmin]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageItems  = filtered.slice((page-1)*pageSize, page*pageSize);
+  // Whichever dataset the active stat box points to — this is what actually
+  // gets paginated and rendered in the table card below.
+  const displayItems = statView === 'queue'      ? filtered
+                      : statView === 'logged'     ? loggedList
+                      : statView === 'followups'  ? followupsList
+                      : statView === 'closed'     ? closedList
+                      : droppedList;
 
-  const noFiltersActive = sourceFilter === 'All' && typeFilter === 'All' && agentFilter === 'All' && !search.trim();
+  const totalPages = Math.max(1, Math.ceil(displayItems.length / pageSize));
+  const pageItems  = displayItems.slice((page-1)*pageSize, page*pageSize);
+
+  const noFiltersActive = statView === 'queue' && sourceFilter === 'All' && typeFilter === 'All' && agentFilter === 'All' && !search.trim();
 
   const clearAllFilters = () => {
-    setSourceFilter('All'); setTypeFilter('All'); setAgentFilter('All'); setSearch(''); setPage(1);
+    setSourceFilter('All'); setTypeFilter('All'); setAgentFilter('All'); setSearch(''); setPage(1); setStatView('queue');
+  };
+
+  const toggleStatView = (key) => {
+    setStatView(prev => prev === key ? 'queue' : key);
+    setPage(1);
   };
 
   const openTakeCall = lead => setActiveLead({
@@ -1318,10 +1513,32 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     });
 
     const hasFu = Boolean(activeLead.followupDate);
+
+    // ── Unified activity-log entry ──────────────────────────────────────
+    // Feeds the Call Logs report page, which pulls together every action
+    // taken from New Calls / Follow-ups / Visits into one place.
+    const activityEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+      timestamp: now, date: now,
+      source: 'call',
+      action: hasFu ? 'Call Logged · Follow-up Scheduled' : 'Call Logged',
+      clientId: activeLead.id, clientName: activeLead.name, phone: activeLead.phone,
+      agentId: myAgentId, agentName: myAgentName,
+      type: activeLead.coMethod === 'WhatsApp' ? 'outbound' : 'inbound',
+      status: activeLead.callStatus === 'Dropped' ? 'dropped' : (hasFu ? 'follow-up' : 'completed'),
+      duration: 0,
+      callOutcome: activeLead.coStatus, callMethod: activeLead.coMethod,
+      leadStatus: activeLead.callStatus, offer: offerLabel,
+      notes: activeLead.coComment || '',
+      propertyType: activeLead.propertyType, leadSource: activeLead.source,
+      followupDate: activeLead.followupDate || null,
+    };
+
     setDb(prev => {
       const next = {
         ...prev,
         callLogs:[entry,...(prev.callLogs||[])],
+        ccCallLogs:[activityEntry,...(prev.ccCallLogs||[])],
         clients:(prev.clients||[]).map(c => c.id===activeLead.id ? updatedClient : c),
       };
       if (hasFu) {
@@ -1385,9 +1602,24 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       ...clientDetailPatch,
     });
 
+    const activityEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+      timestamp: now, date: now,
+      source: 'call', action: 'Call Dropped',
+      clientId: activeLead.id, clientName: activeLead.name, phone: activeLead.phone,
+      agentId: myAgentId, agentName: myAgentName,
+      type: activeLead.coMethod === 'WhatsApp' ? 'outbound' : 'inbound',
+      status: 'dropped', duration: 0,
+      callOutcome: activeLead.coStatus || 'Dropped', callMethod: activeLead.coMethod || 'Call',
+      leadStatus: 'Dropped', offer: '',
+      notes: activeLead.coComment?.trim() || 'Call dropped — customer was not interested.',
+      propertyType: activeLead.propertyType, leadSource: activeLead.source, followupDate: null,
+    };
+
     setDb(prev => ({
       ...prev,
       callLogs:[entry,...(prev.callLogs||[])],
+      ccCallLogs:[activityEntry,...(prev.ccCallLogs||[])],
       clients:(prev.clients||[]).map(c => c.id===activeLead.id ? updatedClient : c),
     }));
 
@@ -1416,6 +1648,13 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
 
   // sources that have at least 1 entry in the visible queue
   const activeSources = Object.keys(SOURCE_PALETTE).filter(s => metrics.bySource[s] > 0);
+
+  const STAT_VIEW_LABEL = {
+    logged:    'Calls logged',
+    followups: 'Follow-ups scheduled',
+    closed:    'Closed clients',
+    dropped:   'Dropped / lost clients',
+  };
 
   return (
     <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:.2}}
@@ -1448,16 +1687,14 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ── ROW 1: Key metrics ──────────────────────────────────────────────
-          Only "In Queue" is clickable — it's the only metric that describes
-          this table (Calls Logged / Follow-ups / Closed / Dropped all refer
-          to clients that have already left the queue, so filtering this
-          table by them would just always show zero rows). Clicking it clears
-          every filter below and jumps back to the full queue.
+          ── ROW 1: Key metrics — every box is clickable ─────────────────────
+          Clicking a box swaps the table below to that dataset (click again,
+          or click "In Queue", to go back). Mirrors the clickable stat boxes
+          in ManageClients and FollowUp.
       ══════════════════════════════════════════════════════════════════════ */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:10 }}>
 
-        {/* Total in queue — clickable, clears all filters */}
+        {/* Total in queue — clickable, clears all filters and returns to queue */}
         <StatBox
           icon={Phone}
           label="In Queue"
@@ -1479,6 +1716,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           bg={C.blueBg}
           border={C.blueBorder}
           sublabel={isSuperAdmin ? 'All agents' : 'By you'}
+          active={statView === 'logged'}
+          onClick={() => toggleStatView('logged')}
         />
 
         {/* Follow-ups sent */}
@@ -1490,6 +1729,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           bg={C.purpleBg}
           border={C.purpleBorder}
           sublabel={isSuperAdmin ? 'All agents' : 'Scheduled by you'}
+          active={statView === 'followups'}
+          onClick={() => toggleStatView('followups')}
         />
 
         {/* Closed leads */}
@@ -1501,6 +1742,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           bg={C.greenBg}
           border={C.greenBorder}
           sublabel={isSuperAdmin ? 'All agents' : 'Your converted leads'}
+          active={statView === 'closed'}
+          onClick={() => toggleStatView('closed')}
         />
 
         {/* Dropped / Lost */}
@@ -1512,107 +1755,123 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           bg={C.redBg}
           border={C.redBorder}
           sublabel={isSuperAdmin ? 'All agents' : 'Your lost leads'}
+          active={statView === 'dropped'}
+          onClick={() => toggleStatView('dropped')}
         />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ── ROW 2: Source breakdown (clickable filter chips) ────────────────
+          ── ROW 2 & 3: Source breakdown + more filters — queue view only ────
       ══════════════════════════════════════════════════════════════════════ */}
-      {activeSources.length > 0 && (
-        <div style={{ marginBottom:20 }}>
-          <DividerLabel>Filter by source</DividerLabel>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+      {statView === 'queue' && (
+        <>
+          {activeSources.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <DividerLabel>Filter by source</DividerLabel>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
 
-            {/* "All" pill */}
-            <button
-              onClick={()=>{ setSourceFilter('All'); setPage(1); }}
-              style={{
-                display:'inline-flex', alignItems:'center', gap:6, padding:'7px 15px',
-                borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:700,
-                border:`1.5px solid ${sourceFilter==='All' ? C.accentDark : C.border}`,
-                background: sourceFilter==='All' ? C.accentLight : C.surface,
-                color: sourceFilter==='All' ? C.accentDark : C.textMid,
-                boxShadow: sourceFilter==='All' ? `0 1px 6px ${C.accent}33` : 'none',
-                transition:'all .13s',
-              }}>
-              <Zap size={11}/>
-              All sources
-              <strong style={{ marginLeft:3, fontSize:13 }}>{metrics.total}</strong>
-            </button>
-
-            {activeSources.map(src => {
-              const pal    = SOURCE_PALETTE[src] || SOURCE_PALETTE.Other;
-              const accent = SOURCE_ACCENT[src]  || C.textMuted;
-              const active = sourceFilter === src;
-              const count  = metrics.bySource[src] || 0;
-              return (
-                <button key={src}
-                  onClick={()=>{ setSourceFilter(p=>p===src?'All':src); setPage(1); }}
+                {/* "All" pill */}
+                <button
+                  onClick={()=>{ setSourceFilter('All'); setPage(1); }}
                   style={{
-                    display:'inline-flex', alignItems:'center', gap:7, padding:'7px 15px',
-                    borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:active?700:600,
-                    border:`1.5px solid ${active ? pal.color : C.border}`,
-                    background: active ? pal.bg : C.surface,
-                    color: active ? pal.color : C.textMid,
-                    boxShadow: active ? `0 1px 6px ${pal.color}33` : 'none',
+                    display:'inline-flex', alignItems:'center', gap:6, padding:'7px 15px',
+                    borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:700,
+                    border:`1.5px solid ${sourceFilter==='All' ? C.accentDark : C.border}`,
+                    background: sourceFilter==='All' ? C.accentLight : C.surface,
+                    color: sourceFilter==='All' ? C.accentDark : C.textMid,
+                    boxShadow: sourceFilter==='All' ? `0 1px 6px ${C.accent}33` : 'none',
                     transition:'all .13s',
                   }}>
-                  <span style={{ width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0 }}/>
-                  {src}
-                  <span style={{
-                    display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    minWidth:20, height:18, borderRadius:C.r.full, padding:'0 6px',
-                    fontSize:11, fontWeight:800,
-                    background: active ? pal.color : C.surfaceSunken,
-                    color: active ? '#fff' : C.textMid,
-                    marginLeft:1,
-                  }}>
-                    {count}
-                  </span>
+                  <Zap size={11}/>
+                  All sources
+                  <strong style={{ marginLeft:3, fontSize:13 }}>{metrics.total}</strong>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          ── ROW 3: More filters (Client Type + Agent for Super Admin) ───────
-      ══════════════════════════════════════════════════════════════════════ */}
-      <div style={{ marginBottom:20 }}>
-        <DividerLabel>More filters</DividerLabel>
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
-          <div style={{ minWidth:170, display:'flex', alignItems:'center', gap:6 }}>
-            <Filter size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
-            <Select value={typeFilter} onChange={e=>{ setTypeFilter(e.target.value); setPage(1); }}>
-              <option value="All">All Types</option>
-              {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </Select>
-          </div>
-          {isSuperAdmin && (
-            <div style={{ minWidth:190 }}>
-              <Select value={agentFilter} onChange={e=>{ setAgentFilter(e.target.value); setPage(1); }}>
-                <option value="All">All Agents</option>
-                <option value="Unclaimed">Unclaimed</option>
-                {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </Select>
+                {activeSources.map(src => {
+                  const pal    = SOURCE_PALETTE[src] || SOURCE_PALETTE.Other;
+                  const accent = SOURCE_ACCENT[src]  || C.textMuted;
+                  const active = sourceFilter === src;
+                  const count  = metrics.bySource[src] || 0;
+                  return (
+                    <button key={src}
+                      onClick={()=>{ setSourceFilter(p=>p===src?'All':src); setPage(1); }}
+                      style={{
+                        display:'inline-flex', alignItems:'center', gap:7, padding:'7px 15px',
+                        borderRadius:C.r.full, cursor:'pointer', fontSize:12.5, fontWeight:active?700:600,
+                        border:`1.5px solid ${active ? pal.color : C.border}`,
+                        background: active ? pal.bg : C.surface,
+                        color: active ? pal.color : C.textMid,
+                        boxShadow: active ? `0 1px 6px ${pal.color}33` : 'none',
+                        transition:'all .13s',
+                      }}>
+                      <span style={{ width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0 }}/>
+                      {src}
+                      <span style={{
+                        display:'inline-flex', alignItems:'center', justifyContent:'center',
+                        minWidth:20, height:18, borderRadius:C.r.full, padding:'0 6px',
+                        fontSize:11, fontWeight:800,
+                        background: active ? pal.color : C.surfaceSunken,
+                        color: active ? '#fff' : C.textMid,
+                        marginLeft:1,
+                      }}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
-          {(typeFilter !== 'All' || (isSuperAdmin && agentFilter !== 'All')) && (
-            <button onClick={()=>{ setTypeFilter('All'); setAgentFilter('All'); setPage(1); }} style={{
-              display:'inline-flex', alignItems:'center', gap:6, background:'none',
-              border:`1.5px solid ${C.border}`, borderRadius:C.r.md, padding:'9px 14px',
-              fontSize:12.5, fontWeight:600, color:C.textMid, cursor:'pointer',
-            }}>
-              <RotateCcw size={12}/> Clear
-            </button>
-          )}
-        </div>
-      </div>
+
+          <div style={{ marginBottom:20 }}>
+            <DividerLabel>More filters</DividerLabel>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
+              <div style={{ minWidth:170, display:'flex', alignItems:'center', gap:6 }}>
+                <Filter size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
+                <Select value={typeFilter} onChange={e=>{ setTypeFilter(e.target.value); setPage(1); }}>
+                  <option value="All">All Types</option>
+                  {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </Select>
+              </div>
+              {isSuperAdmin && (
+                <div style={{ minWidth:190 }}>
+                  <Select value={agentFilter} onChange={e=>{ setAgentFilter(e.target.value); setPage(1); }}>
+                    <option value="All">All Agents</option>
+                    <option value="Unclaimed">Unclaimed</option>
+                    {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </Select>
+                </div>
+              )}
+              {(typeFilter !== 'All' || (isSuperAdmin && agentFilter !== 'All')) && (
+                <button onClick={()=>{ setTypeFilter('All'); setAgentFilter('All'); setPage(1); }} style={{
+                  display:'inline-flex', alignItems:'center', gap:6, background:'none',
+                  border:`1.5px solid ${C.border}`, borderRadius:C.r.md, padding:'9px 14px',
+                  fontSize:12.5, fontWeight:600, color:C.textMid, cursor:'pointer',
+                }}>
+                  <RotateCcw size={12}/> Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Table card ── */}
       <div style={{ background:C.surface, border:`1px solid ${C.border}`,
         borderRadius:C.r.lg, overflow:'hidden', boxShadow:C.shadow.md }}>
+
+        {statView !== 'queue' && (
+          <div style={{ padding:'10px 18px', fontSize:12.5, fontWeight:600, color:C.accentDark,
+            background:C.accentLight, borderBottom:`1px solid ${C.accentBorder}`,
+            display:'flex', alignItems:'center', gap:8 }}>
+            <Filter size={13}/>
+            Showing: {STAT_VIEW_LABEL[statView]}
+            <button onClick={()=>toggleStatView(statView)} style={{ marginLeft:'auto', background:'none', border:'none',
+              color:C.accentDark, fontWeight:700, cursor:'pointer', fontSize:12.5, display:'flex', alignItems:'center', gap:4 }}>
+              <X size={12}/> Back to queue
+            </button>
+          </div>
+        )}
 
         {/* Controls bar */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
@@ -1644,154 +1903,158 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
         </div>
 
         {/* Table */}
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead>
-              <tr style={{ background:C.surfaceRaised }}>
-                {[
-                  {label:'Client',   align:'left'},
-                  {label:'Phone',    align:'left'},
-                  {label:'Property', align:'left'},
-                  {label:'Source',   align:'left'},
-                  {label:'Type',     align:'left'},
-                  {label:'Added',    align:'left'},
-                  ...(isSuperAdmin ? [{label:'Agent', align:'left'}] : []),
-                  {label:'Actions',  align:'center'},
-                ].map(h => (
-                  <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
-                    fontSize:10.5, fontWeight:700, color:C.textMuted,
-                    textTransform:'uppercase', letterSpacing:'.07em',
-                    borderBottom:`1.5px solid ${C.border}`, whiteSpace:'nowrap' }}>
-                    {h.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.length === 0 ? (
-                <tr>
-                  <td colSpan={isSuperAdmin ? 8 : 7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
-                    <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
-                      display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-                      <Users size={24} style={{ opacity:.4 }}/>
-                    </div>
-                    <div style={{ fontSize:14.5, fontWeight:700, color:C.textMid, marginBottom:6 }}>
-                      No clients in the queue
-                    </div>
-                    <div style={{ fontSize:13, opacity:.7 }}>
-                      {allClients.length === 0
-                        ? 'Add a client or import a list to get started.'
-                        : 'All clients have been called, claimed by other agents, or adjust your search / filter.'}
-                    </div>
-                  </td>
+        {statView === 'queue' ? (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ background:C.surfaceRaised }}>
+                  {[
+                    {label:'Client',   align:'left'},
+                    {label:'Phone',    align:'left'},
+                    {label:'Property', align:'left'},
+                    {label:'Source',   align:'left'},
+                    {label:'Type',     align:'left'},
+                    {label:'Added',    align:'left'},
+                    ...(isSuperAdmin ? [{label:'Agent', align:'left'}] : []),
+                    {label:'Actions',  align:'center'},
+                  ].map(h => (
+                    <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
+                      fontSize:10.5, fontWeight:700, color:C.textMuted,
+                      textTransform:'uppercase', letterSpacing:'.07em',
+                      borderBottom:`1.5px solid ${C.border}`, whiteSpace:'nowrap' }}>
+                      {h.label}
+                    </th>
+                  ))}
                 </tr>
-              ) : pageItems.map((item, i) => {
-                const srcColor = SOURCE_ACCENT[item.source] || C.textMuted;
-                const hovered  = hoveredRow === item.id;
-                const claimedByOther = isSuperAdmin && item.assignedAgentId && item.assignedAgentId !== myAgentId;
-
-                // ── Phone visibility ────────────────────────────────────
-                // A phone number is only shown in full once THIS agent has
-                // taken the call (i.e. the client is assigned to them), or
-                // for Super Admin who can see everything. Otherwise it's
-                // masked: first 5 digits visible, the rest replaced with •.
-                const canSeeFullPhone = isSuperAdmin || isMine(item);
-                const displayPhone = item.phone
-                  ? (canSeeFullPhone ? item.phone : maskPhone(item.phone))
-                  : null;
-
-                return (
-                  <tr key={item.id}
-                    onMouseEnter={()=>setHoveredRow(item.id)}
-                    onMouseLeave={()=>setHoveredRow(null)}
-                    style={{
-                      background: hovered ? '#FFFDF5' : i%2 ? C.surfaceRaised : 'transparent',
-                      transition:'background .1s',
-                    }}>
-                    <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`,
-                      maxWidth:240, paddingLeft:0 }}>
-                      <div style={{ display:'flex', alignItems:'center' }}>
-                        <div style={{ width:3, height:44, flexShrink:0, borderRadius:2,
-                          background:srcColor, marginRight:13, opacity:.85 }}/>
-                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                          <Avatar name={item.name} size={32}/>
-                          <div style={{ minWidth:0 }}>
-                            <div style={{ fontSize:13.5, fontWeight:600, color:C.text,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                              {item.name}
-                            </div>
-                            <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>
-                              {item.company || `#${item.id}`}
-                            </div>
-                          </div>
-                        </div>
+              </thead>
+              <tbody>
+                {pageItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={isSuperAdmin ? 8 : 7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
+                      <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
+                        display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+                        <Users size={24} style={{ opacity:.4 }}/>
                       </div>
-                    </td>
-                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
-                      borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                      {displayPhone ? (
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-                          <span style={{ fontFamily: canSeeFullPhone ? 'inherit' : 'monospace', letterSpacing: canSeeFullPhone ? 'normal' : '1px' }}>
-                            {displayPhone}
-                          </span>
-                          {!canSeeFullPhone && (
-                            <EyeOff size={12} style={{ color:C.textMuted, flexShrink:0 }} title="Take the call to reveal full number"/>
-                          )}
-                        </span>
-                      ) : (
-                        <span style={{ color:C.textMuted }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
-                      borderBottom:`1px solid ${C.border}99` }}>
-                      {item.propertyType || <span style={{ color:C.textMuted }}>—</span>}
-                    </td>
-                    <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
-                      {item.source ? <SourceTag source={item.source}/> : <span style={{ color:C.textMuted }}>—</span>}
-                    </td>
-                    <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
-                      borderBottom:`1px solid ${C.border}99` }}>
-                      {item.type || '—'}
-                    </td>
-                    <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
-                      borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
-                    </td>
-                    {isSuperAdmin && (
-                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
-                        {item.assignedAgentId
-                          ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
-                          : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
-                      </td>
-                    )}
-                    <td style={{ padding:'11px 16px', textAlign:'center',
-                      borderBottom:`1px solid ${C.border}99` }}>
-                      <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
-                        <IconAction
-                          icon={claimedByOther ? Lock : Phone}
-                          onClick={()=>takeClient(item)}
-                          title={claimedByOther ? `Claimed by ${item.assignedAgentName}` : 'Take call'}
-                          variant="primary"
-                          disabled={claimedByOther}
-                        />
-                        <IconAction icon={Pencil} onClick={()=>setEditTarget(item)}   title="Edit"      variant="default"/>
-                        <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"    variant="danger"/>
+                      <div style={{ fontSize:14.5, fontWeight:700, color:C.textMid, marginBottom:6 }}>
+                        No clients in the queue
+                      </div>
+                      <div style={{ fontSize:13, opacity:.7 }}>
+                        {allClients.length === 0
+                          ? 'Add a client or import a list to get started.'
+                          : 'All clients have been called, claimed by other agents, or adjust your search / filter.'}
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ) : pageItems.map((item, i) => {
+                  const srcColor = SOURCE_ACCENT[item.source] || C.textMuted;
+                  const hovered  = hoveredRow === item.id;
+                  const claimedByOther = isSuperAdmin && item.assignedAgentId && item.assignedAgentId !== myAgentId;
+
+                  // ── Phone visibility ────────────────────────────────────
+                  // A phone number is only shown in full once THIS agent has
+                  // taken the call (i.e. the client is assigned to them), or
+                  // for Super Admin who can see everything. Otherwise it's
+                  // masked: first 5 digits visible, the rest replaced with •.
+                  const canSeeFullPhone = isSuperAdmin || isMine(item);
+                  const displayPhone = item.phone
+                    ? (canSeeFullPhone ? item.phone : maskPhone(item.phone))
+                    : null;
+
+                  return (
+                    <tr key={item.id}
+                      onMouseEnter={()=>setHoveredRow(item.id)}
+                      onMouseLeave={()=>setHoveredRow(null)}
+                      style={{
+                        background: hovered ? '#FFFDF5' : i%2 ? C.surfaceRaised : 'transparent',
+                        transition:'background .1s',
+                      }}>
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`,
+                        maxWidth:240, paddingLeft:0 }}>
+                        <div style={{ display:'flex', alignItems:'center' }}>
+                          <div style={{ width:3, height:44, flexShrink:0, borderRadius:2,
+                            background:srcColor, marginRight:13, opacity:.85 }}/>
+                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            <Avatar name={item.name} size={32}/>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontSize:13.5, fontWeight:600, color:C.text,
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {item.name}
+                              </div>
+                              <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>
+                                {item.company || `#${item.id}`}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                        borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                        {displayPhone ? (
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                            <span style={{ fontFamily: canSeeFullPhone ? 'inherit' : 'monospace', letterSpacing: canSeeFullPhone ? 'normal' : '1px' }}>
+                              {displayPhone}
+                            </span>
+                            {!canSeeFullPhone && (
+                              <EyeOff size={12} style={{ color:C.textMuted, flexShrink:0 }} title="Take the call to reveal full number"/>
+                            )}
+                          </span>
+                        ) : (
+                          <span style={{ color:C.textMuted }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                        borderBottom:`1px solid ${C.border}99` }}>
+                        {item.propertyType || <span style={{ color:C.textMuted }}>—</span>}
+                      </td>
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                        {item.source ? <SourceTag source={item.source}/> : <span style={{ color:C.textMuted }}>—</span>}
+                      </td>
+                      <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
+                        borderBottom:`1px solid ${C.border}99` }}>
+                        {item.type || '—'}
+                      </td>
+                      <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
+                        borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
+                      </td>
+                      {isSuperAdmin && (
+                        <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                          {item.assignedAgentId
+                            ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
+                            : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
+                        </td>
+                      )}
+                      <td style={{ padding:'11px 16px', textAlign:'center',
+                        borderBottom:`1px solid ${C.border}99` }}>
+                        <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
+                          <IconAction
+                            icon={claimedByOther ? Lock : Phone}
+                            onClick={()=>takeClient(item)}
+                            title={claimedByOther ? `Claimed by ${item.assignedAgentName}` : 'Take call'}
+                            variant="primary"
+                            disabled={claimedByOther}
+                          />
+                          <IconAction icon={Pencil} onClick={()=>setEditTarget(item)}   title="Edit"      variant="default"/>
+                          <IconAction icon={Trash2} onClick={()=>setDeleteTarget(item)} title="Delete"    variant="danger"/>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <SecondaryTable statView={statView} items={pageItems} isSuperAdmin={isSuperAdmin}/>
+        )}
 
         {/* Pagination */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
           flexWrap:'wrap', gap:12, padding:'11px 18px',
           borderTop:`1px solid ${C.border}`, background:C.surfaceRaised }}>
           <span style={{ fontSize:12.5, color:C.textMuted }}>
-            Showing {filtered.length===0?0:(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {filtered.length}
-            {filtered.length !== queue.length ? ` (filtered from ${queue.length})` : ''}
+            Showing {displayItems.length===0?0:(page-1)*pageSize+1}–{Math.min(page*pageSize,displayItems.length)} of {displayItems.length}
+            {statView === 'queue' && displayItems.length !== queue.length ? ` (filtered from ${queue.length})` : ''}
           </span>
           <div style={{ display:'flex', gap:4, alignItems:'center' }}>
             <PageBtn disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}>

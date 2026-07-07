@@ -786,6 +786,23 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // ── Unified activity log ────────────────────────────────────────────────
+  // Every meaningful action taken on this page (schedule / complete / miss /
+  // reschedule / remark) is pushed here so the Call Logs report page can
+  // show a single feed across New Calls, Follow-ups, and Visits.
+  const pushActivity = (entry) => {
+    setDb(prev => ({
+      ...prev,
+      ccCallLogs: [{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        agentId: myAgentId, agentName: myAgentName,
+        source: 'visit',
+        ...entry,
+      }, ...(prev.ccCallLogs || [])],
+    }));
+  };
+
   const stats = useMemo(() => ({
     total:     visits.length,
     todays:    visits.filter(v => v.scheduledDate === today).length,
@@ -849,14 +866,26 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
   };
 
   const handleMarkDone = (id) => {
+    const v = visits.find(x => x.id === id);
     updateVisit(id, { status: 'completed', completedAt: new Date().toISOString() });
     logAction?.('Completed visit', 'visit', id);
+    pushActivity({
+      action: 'Visit Completed', clientId: id, clientName: v?.clientName, phone: v?.clientPhone,
+      status: 'completed', scheduledDate: v?.scheduledDate, scheduledTime: v?.scheduledTime,
+      propertyType: v?.propertyType, location: v?.location, notes: '',
+    });
     setDetailTarget(null);
   };
 
   const handleMarkMissed = (id) => {
+    const v = visits.find(x => x.id === id);
     updateVisit(id, { status: 'missed' });
     logAction?.('Marked visit missed', 'visit', id);
+    pushActivity({
+      action: 'Visit Missed', clientId: id, clientName: v?.clientName, phone: v?.clientPhone,
+      status: 'missed', scheduledDate: v?.scheduledDate, scheduledTime: v?.scheduledTime,
+      propertyType: v?.propertyType, location: v?.location, notes: '',
+    });
     setDetailTarget(null);
   };
 
@@ -875,6 +904,11 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
       ),
     }));
     logAction?.('Rescheduled visit', 'visit', v.clientName);
+    pushActivity({
+      action: 'Visit Rescheduled', clientId: v.id, clientName: v.clientName, phone: v.clientPhone,
+      status: 'rescheduled', scheduledDate: date, scheduledTime: time,
+      propertyType: v.propertyType, location: v.location, notes: reason || '',
+    });
     setRescheduleTarget(null);
   };
 
@@ -897,26 +931,43 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
       };
       setDb(prev => ({ ...prev, visits: [entry, ...(prev.visits || [])] }));
       logAction?.('Scheduled visit', 'visit', meta.clientName);
+      pushActivity({
+        action: 'Visit Scheduled', clientId: entry.id, clientName: meta.clientName, phone: meta.clientPhone,
+        status: 'upcoming', scheduledDate: meta.scheduledDate, scheduledTime: meta.scheduledTime,
+        propertyType: meta.propertyType, location: meta.location, notes: initialNoteText || '',
+      });
       setDetailTarget(null);
     } else {
       const wasCompleting = meta.status === 'completed' && detailTarget.status !== 'completed';
       updateVisit(detailTarget.id, { ...meta, ...(wasCompleting ? { completedAt: new Date().toISOString() } : {}) });
       logAction?.(wasCompleting ? 'Completed visit' : 'Edited visit', 'visit', meta.clientName);
+      pushActivity({
+        action: wasCompleting ? 'Visit Completed' : 'Visit Updated',
+        clientId: detailTarget.id, clientName: meta.clientName, phone: meta.clientPhone,
+        status: meta.status, scheduledDate: meta.scheduledDate, scheduledTime: meta.scheduledTime,
+        propertyType: meta.propertyType, location: meta.location, notes: '',
+      });
       // keep the modal open so the remark history stays visible
     }
   };
 
   const handleAddNote = (id, text) => {
+    const v = visits.find(x => x.id === id);
     setDb(prev => ({
       ...prev,
-      visits: (prev.visits || []).map(v => {
-        if (v.id !== id) return v;
-        const existing = getNotes(v);
+      visits: (prev.visits || []).map(x => {
+        if (x.id !== id) return x;
+        const existing = getNotes(x);
         const noteEntry = { id: `${Date.now()}`, text, createdAt: new Date().toISOString(), createdBy: myAgentName };
-        return { ...v, remarks: [...existing, noteEntry] };
+        return { ...x, remarks: [...existing, noteEntry] };
       }),
     }));
     logAction?.('Added remark to visit', 'visit', id);
+    pushActivity({
+      action: 'Visit Remark Added', clientId: id, clientName: v?.clientName, phone: v?.clientPhone,
+      status: v?.status, scheduledDate: v?.scheduledDate, scheduledTime: v?.scheduledTime,
+      propertyType: v?.propertyType, location: v?.location, notes: text,
+    });
   };
 
   // Always look up the live record so the modal's remark history stays in
@@ -965,13 +1016,23 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
         </PrimaryBtn>
       </div>
 
-      {/* Stat boxes */}
+      {/* Stat boxes — every box is clickable, same pattern as ManageClients / FollowUp */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 10 }}>
-        <StatBox icon={Users}       label="Total"     value={stats.total}     color={C.textMid} bg={C.surfaceRaised} border={C.border} />
-        <StatBox icon={Calendar}    label="Today's"   value={stats.todays}    color={C.blue}    bg={C.blueBg}       border={C.blueBorder} />
-        <StatBox icon={Clock}       label="Upcoming"  value={stats.upcoming}  color={C.yellow}  bg={C.yellowBg}     border={C.yellowBorder} />
-        <StatBox icon={CheckCheck}  label="Completed" value={stats.completed} color={C.green}   bg={C.greenBg}      border={C.greenBorder} />
-        <StatBox icon={AlertCircle} label="Missed"    value={stats.missed}    color={C.red}     bg={C.redBg}        border={C.redBorder} />
+        <StatBox icon={Users}       label="Total"     value={stats.total}     color={C.textMid} bg={C.surfaceRaised} border={C.border}
+          active={filterStatus === 'All' && viewTab === 'all'}
+          onClick={() => { setFilterStatus('All'); handleTabChange('all'); }} />
+        <StatBox icon={Calendar}    label="Today's"   value={stats.todays}    color={C.blue}    bg={C.blueBg}       border={C.blueBorder}
+          active={viewTab === 'today'}
+          onClick={() => handleTabChange(viewTab === 'today' ? 'all' : 'today')} />
+        <StatBox icon={Clock}       label="Upcoming"  value={stats.upcoming}  color={C.yellow}  bg={C.yellowBg}     border={C.yellowBorder}
+          active={filterStatus === 'upcoming'}
+          onClick={() => { setFilterStatus(p => p === 'upcoming' ? 'All' : 'upcoming'); setPage(1); }} />
+        <StatBox icon={CheckCheck}  label="Completed" value={stats.completed} color={C.green}   bg={C.greenBg}      border={C.greenBorder}
+          active={filterStatus === 'completed'}
+          onClick={() => { setFilterStatus(p => p === 'completed' ? 'All' : 'completed'); setPage(1); }} />
+        <StatBox icon={AlertCircle} label="Missed"    value={stats.missed}    color={C.red}     bg={C.redBg}        border={C.redBorder}
+          active={filterStatus === 'missed'}
+          onClick={() => { setFilterStatus(p => p === 'missed' ? 'All' : 'missed'); setPage(1); }} />
       </div>
 
       {/* Status filter chips */}

@@ -2,23 +2,31 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search, Plus, X, Trash2, Edit3, Phone, Mail, MapPin,
-  Building2, Tag, DollarSign, ChevronDown, Users as UsersIcon,
-  Briefcase, Home, Compass, LandPlot, ShieldCheck,
+  Building2, DollarSign, ChevronDown, Users as UsersIcon,
+  Briefcase, Home, Compass, LandPlot, ShieldCheck, Hash,
+  Flag, CalendarClock, CalendarCheck2, Building,
 } from 'lucide-react';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const CLIENT_TYPES = ['Buyer', 'Seller', 'Tenant', 'Landlord', 'Investor'];
 const PURPOSES = ['Invest', 'Living', 'Rent'];
 
+// Pipeline stages — replaces the old Lead/Contacted/Negotiation/Closed/Lost set.
 const STATUS_STYLE = {
-  Lead:        { bg: 'rgba(99,102,241,0.12)',  color: '#6366F1' },
-  Contacted:   { bg: 'rgba(14,165,233,0.12)',  color: '#0EA5E9' },
-  Negotiation: { bg: 'rgba(245,158,11,0.12)',  color: '#F59E0B' },
-  Closed:      { bg: 'rgba(34,197,94,0.12)',   color: '#22C55E' },
-  Lost:        { bg: 'rgba(244,63,94,0.12)',   color: '#F43F5E' },
+  'New Lead':          { bg: 'rgba(99,102,241,0.12)',  color: '#6366F1' },
+  'Follow Up':         { bg: 'rgba(245,158,11,0.12)',  color: '#F59E0B' },
+  'Visit':             { bg: 'rgba(14,165,233,0.12)',  color: '#0EA5E9' },
+  'Booking Completed': { bg: 'rgba(34,197,94,0.12)',   color: '#22C55E' },
+  'Junk Lead':         { bg: 'rgba(244,63,94,0.12)',   color: '#F43F5E' },
 };
-
 const STATUS_OPTIONS = Object.keys(STATUS_STYLE);
+
+const PRIORITY_STYLE = {
+  High:   { bg: 'rgba(244,63,94,0.12)',  color: '#F43F5E' },
+  Medium: { bg: 'rgba(245,158,11,0.12)', color: '#F59E0B' },
+  Low:    { bg: 'rgba(34,197,94,0.12)',  color: '#22C55E' },
+};
+const PRIORITY_OPTIONS = Object.keys(PRIORITY_STYLE);
 
 const SOURCES = ['Referral', 'Walk-in', 'Website', 'Facebook', 'Call Center', 'Agent Network', 'Other'];
 
@@ -35,7 +43,9 @@ const emptyClient = () => ({
   email: '',
   type: 'Buyer',
   purpose: '',
-  status: 'Lead',
+  status: 'New Lead',
+  priority: 'Medium',
+  projectInterest: '',
   source: 'Referral',
   propertyType: 'Apartment',
   budgetMin: '',
@@ -52,21 +62,18 @@ const emptyClient = () => ({
   assignedAt:        null,
 });
 
-// ─── BADGE ──────────────────────────────────────────────────────────────────
-const Badge = ({ label, style }) => (
-  <span style={{
-    display: 'inline-flex', alignItems: 'center',
-    padding: '3px 10px', borderRadius: 999,
-    fontSize: 11, fontWeight: 700,
-    background: style?.bg || 'rgba(255,255,255,0.05)',
-    color: style?.color || 'var(--text-muted)',
-    whiteSpace: 'nowrap',
-  }}>
-    {label}
-  </span>
-);
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+const norm = (s) => (s || '').toString().trim().toLowerCase();
 
-// ─── BUDGET FORMAT ──────────────────────────────────────────────────────────
+const leadIdLabel = (id) => `CL-${String(id).slice(-6).padStart(6, '0')}`;
+
+const formatDateShort = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+};
+
 const formatBudget = (min, max) => {
   const fmt = v => {
     const n = Number(v);
@@ -82,11 +89,26 @@ const formatBudget = (min, max) => {
   return a || b;
 };
 
+// ─── BADGE ──────────────────────────────────────────────────────────────────
+const Badge = ({ label, style }) => (
+  <span style={{
+    display: 'inline-flex', alignItems: 'center',
+    padding: '3px 10px', borderRadius: 999,
+    fontSize: 11, fontWeight: 700,
+    background: style?.bg || 'rgba(255,255,255,0.05)',
+    color: style?.color || 'var(--text-muted)',
+    whiteSpace: 'nowrap',
+  }}>
+    {label}
+  </span>
+);
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient }) => {
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'super_admin';
 
-  const allClients = db.clients || [];
+  const allClients   = db.clients   || [];
+  const allFollowUps = db.followUps || [];
 
   // Scope: agents only see their assigned clients
   const clients = useMemo(() => {
@@ -97,6 +119,7 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
   const [search, setSearch]             = useState('');
   const [typeFilter, setTypeFilter]     = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
   const [agentFilter, setAgentFilter]   = useState('All');
   const [showModal, setShowModal]       = useState(false);
   const [editing, setEditing]           = useState(null);
@@ -113,6 +136,33 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
     return Object.entries(map).map(([id, name]) => ({ id, name }));
   }, [allClients, isSuperAdmin]);
 
+  // Map each client -> { last: dueDate|null, next: dueDate|null } from FollowUp.jsx records,
+  // matched by phone (preferred) or name.
+  const followupInfo = useMemo(() => {
+    const map = {};
+    allClients.forEach(c => {
+      const phoneKey = norm(c.phone);
+      const nameKey  = norm(c.name);
+      const matches = allFollowUps.filter(f => {
+        const fPhone = norm(f.clientPhone);
+        const fName  = norm(f.clientName);
+        if (phoneKey && fPhone) return fPhone === phoneKey;
+        return nameKey && fName === nameKey;
+      });
+      const completed = matches
+        .filter(f => f.status === 'completed')
+        .sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''));
+      const pending = matches
+        .filter(f => f.status === 'pending')
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+      map[c.id] = {
+        last: completed[0]?.dueDate || null,
+        next: pending[0]?.dueDate || null,
+      };
+    });
+    return map;
+  }, [allClients, allFollowUps]);
+
   // Filtered list
   const filtered = useMemo(() => {
     const base = isSuperAdmin ? allClients : clients;
@@ -124,25 +174,30 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
         c.email?.toLowerCase().includes(q) ||
         c.location?.toLowerCase().includes(q) ||
         c.company?.toLowerCase().includes(q) ||
+        c.projectInterest?.toLowerCase().includes(q) ||
+        leadIdLabel(c.id).toLowerCase().includes(q) ||
         (isSuperAdmin && c.assignedAgentName?.toLowerCase().includes(q));
-      const matchesType   = typeFilter === 'All' || c.type === typeFilter;
-      const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
+      const matchesType     = typeFilter === 'All' || c.type === typeFilter;
+      const matchesStatus   = statusFilter === 'All' || c.status === statusFilter;
+      const matchesPriority = priorityFilter === 'All' || c.priority === priorityFilter;
       const matchesAgent  =
         !isSuperAdmin ||
         agentFilter === 'All' ||
         (agentFilter === 'Unassigned' ? !c.assignedAgentId : c.assignedAgentId === agentFilter);
-      return matchesSearch && matchesType && matchesStatus && matchesAgent;
+      return matchesSearch && matchesType && matchesStatus && matchesPriority && matchesAgent;
     }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [clients, allClients, isSuperAdmin, search, typeFilter, statusFilter, agentFilter]);
+  }, [clients, allClients, isSuperAdmin, search, typeFilter, statusFilter, priorityFilter, agentFilter]);
 
-  // Stats scoped to agent's own clients
+  // Stats scoped to agent's own clients (or everyone for Super Admin)
+  const statsBase = isSuperAdmin ? allClients : clients;
   const stats = useMemo(() => ({
-    total:      clients.length,
-    leads:      clients.filter(c => c.status === 'Lead').length,
-    active:     clients.filter(c => ['Contacted', 'Negotiation'].includes(c.status)).length,
-    closed:     clients.filter(c => c.status === 'Closed').length,
-    unassigned: isSuperAdmin ? allClients.filter(c => !c.assignedAgentId).length : 0,
-  }), [clients, allClients, isSuperAdmin]);
+    total:             statsBase.length,
+    newLead:           statsBase.filter(c => c.status === 'New Lead').length,
+    followUp:          statsBase.filter(c => c.status === 'Follow Up').length,
+    visit:             statsBase.filter(c => c.status === 'Visit').length,
+    bookingCompleted:  statsBase.filter(c => c.status === 'Booking Completed').length,
+    junkLead:          statsBase.filter(c => c.status === 'Junk Lead').length,
+  }), [statsBase]);
 
   const openAdd  = () => { setEditing(emptyClient()); setShowModal(true); };
   const openEdit = (c) => { setEditing({ ...emptyClient(), ...c }); setShowModal(true); };
@@ -171,6 +226,15 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
   };
 
   const set = (key, val) => setEditing(prev => ({ ...prev, [key]: val }));
+
+  const statBoxes = [
+    { key: 'All',                label: isSuperAdmin ? 'Total Clients' : 'My Clients', value: stats.total,            color: '#334155' },
+    { key: 'New Lead',           label: 'New Lead',           value: stats.newLead,          color: '#6366F1' },
+    { key: 'Follow Up',          label: 'Follow Up',          value: stats.followUp,         color: '#F59E0B' },
+    { key: 'Visit',              label: 'Visit',              value: stats.visit,            color: '#0EA5E9' },
+    { key: 'Booking Completed',  label: 'Booking Completed',  value: stats.bookingCompleted, color: '#22C55E' },
+    { key: 'Junk Lead',          label: 'Junk Lead',          value: stats.junkLead,          color: '#F43F5E' },
+  ];
 
   return (
     <motion.div
@@ -221,31 +285,36 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
         </button>
       </div>
 
-      {/* ── STAT CARDS ─────────────────────────────────────────────────── */}
+      {/* ── STAT CARDS (click to filter by status) ─────────────────────── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 14, marginBottom: 24
       }}>
-        {[
-          { label: isSuperAdmin ? 'Total Clients' : 'My Clients', value: stats.total,  color: '#6366F1' },
-          { label: 'New Leads',    value: stats.leads,      color: '#0EA5E9' },
-          { label: 'In Progress',  value: stats.active,     color: '#F59E0B' },
-          { label: 'Closed Deals', value: stats.closed,     color: '#22C55E' },
-          ...(isSuperAdmin ? [{ label: 'Unassigned', value: stats.unassigned, color: '#F43F5E' }] : []),
-        ].map(s => (
-          <div key={s.label} style={{
-            background: 'var(--surface)', borderRadius: 14,
-            padding: '16px 18px', border: '1px solid var(--border)'
-          }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
-              {s.label}
-            </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>
-              {s.value}
-            </div>
-          </div>
-        ))}
+        {statBoxes.map(s => {
+          const active = statusFilter === s.key;
+          return (
+            <button
+              key={s.label}
+              onClick={() => setStatusFilter(prev => prev === s.key ? 'All' : s.key)}
+              style={{
+                textAlign: 'left', cursor: 'pointer',
+                background: 'var(--surface)', borderRadius: 14,
+                padding: '16px 18px',
+                border: `1.5px solid ${active ? s.color : 'var(--border)'}`,
+                boxShadow: active ? `0 2px 10px ${s.color}33` : 'none',
+                transition: 'all .13s',
+              }}
+            >
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
+                {s.label}
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>
+                {s.value}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── FILTER BAR ─────────────────────────────────────────────────── */}
@@ -263,8 +332,8 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
             onChange={e => setSearch(e.target.value)}
             placeholder={
               isSuperAdmin
-                ? 'Search by name, phone, email, company, agent…'
-                : 'Search by name, phone, email, company, or location…'
+                ? 'Search by lead ID, name, phone, email, project, agent…'
+                : 'Search by lead ID, name, phone, email, or project…'
             }
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
@@ -283,6 +352,11 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
+        <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} style={selectStyle}>
+          <option value="All">All Priorities</option>
+          {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+
         {isSuperAdmin && (
           <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} style={selectStyle}>
             <option value="All">All Agents</option>
@@ -294,13 +368,15 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
         )}
       </div>
 
-      {/* ── CLIENT LIST ────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filtered.length === 0 && (
+      {/* ── CLIENT TABLE ───────────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 14, overflow: 'hidden'
+      }}>
+        {filtered.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '60px 20px',
-            color: 'var(--text-muted)', background: 'var(--surface)',
-            borderRadius: 14, border: '1px solid var(--border)'
+            color: 'var(--text-muted)',
           }}>
             <UsersIcon size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
             <p style={{ margin: 0, fontSize: 14 }}>
@@ -311,153 +387,152 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
                 : 'No clients match your filters.'}
             </p>
           </div>
-        )}
-
-        {filtered.map(c => {
-          const sStyle  = STATUS_STYLE[c.status] || {};
-          const reqParts = [c.reqLand, c.reqFlat, c.reqFacing].filter(Boolean);
-          const canEdit  = isSuperAdmin || c.assignedAgentId === user?.id;
-
-          return (
-            <div key={c.id} style={{
-              display: 'flex', alignItems: 'center', gap: 16,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 14, padding: '16px 18px'
-            }}>
-              {/* Avatar */}
-              <div style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: 'rgba(99,102,241,0.12)', color: '#6366F1',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 800, fontSize: 16, flexShrink: 0
-              }}>
-                {(c.name || '?')[0].toUpperCase()}
-              </div>
-
-              {/* Main info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                    {c.name}
-                  </span>
-                  <Badge label={c.type} style={{ bg: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }} />
-                  {c.purpose && (
-                    <Badge label={c.purpose} style={{ bg: 'rgba(99,102,241,0.08)', color: '#818CF8' }} />
-                  )}
-                  {/* Agent tag — Super Admin only */}
-                  {isSuperAdmin && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      fontSize: 11, fontWeight: 600,
-                      color: c.assignedAgentName ? '#7c3aed' : 'var(--text-muted)',
-                      background: c.assignedAgentName ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${c.assignedAgentName ? 'rgba(124,58,237,0.2)' : 'var(--border)'}`,
-                      padding: '2px 8px', borderRadius: 20,
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg)' }}>
+                  {[
+                    'Lead ID', 'Client Name', 'Mobile', 'Project Interest',
+                    'Status', 'Agent', 'Priority', 'Last Followup', 'Next Followup', 'Actions'
+                  ].map(h => (
+                    <th key={h} style={{
+                      textAlign: h === 'Actions' ? 'center' : 'left',
+                      padding: '10px 14px', fontSize: 10.5, fontWeight: 700,
+                      color: 'var(--text-muted)', textTransform: 'uppercase',
+                      letterSpacing: '0.05em', borderBottom: '1px solid var(--border)',
+                      whiteSpace: 'nowrap',
                     }}>
-                      <ShieldCheck size={10} />
-                      {c.assignedAgentName || 'Unassigned'}
-                    </span>
-                  )}
-                </div>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(c => {
+                  const sStyle  = STATUS_STYLE[c.status] || {};
+                  const pStyle  = PRIORITY_STYLE[c.priority] || {};
+                  const canEdit = isSuperAdmin || c.assignedAgentId === user?.id;
+                  const fu      = followupInfo[c.id] || {};
+                  const lastF   = formatDateShort(fu.last);
+                  const nextF   = formatDateShort(fu.next);
 
-                <div style={{
-                  display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap',
-                  fontSize: 12, color: 'var(--text-muted)'
-                }}>
-                  {(c.profession || c.designation) && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Briefcase size={12} /> {[c.profession, c.designation].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                  {c.phone && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Phone size={12} /> {c.phone}
-                    </span>
-                  )}
-                  {c.email && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Mail size={12} /> {c.email}
-                    </span>
-                  )}
-                  {c.location && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MapPin size={12} /> {c.location}
-                    </span>
-                  )}
-                </div>
+                  return (
+                    <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '11px 14px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Hash size={11} /> {leadIdLabel(c.id)}
+                        </span>
+                      </td>
 
-                {reqParts.length > 0 && (
-                  <div style={{
-                    display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap',
-                    fontSize: 11, color: 'var(--text-muted)'
-                  }}>
-                    {reqParts.map((r, i) => (
-                      <span key={i} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        background: 'rgba(255,255,255,0.04)', padding: '2px 8px',
-                        borderRadius: 6
-                      }}>
-                        <LandPlot size={10} /> {r}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <td style={{ padding: '11px 14px', minWidth: 160 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 10,
+                            background: 'rgba(99,102,241,0.12)', color: '#6366F1',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 800, fontSize: 13, flexShrink: 0
+                          }}>
+                            {(c.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {c.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.type}</div>
+                          </div>
+                        </div>
+                      </td>
 
-              {/* Property interest */}
-              <div style={{
-                minWidth: 130, textAlign: 'left', flexShrink: 0,
-                display: 'flex', flexDirection: 'column', gap: 4
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                  <Building2 size={12} /> {c.propertyType}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
-                  <DollarSign size={12} /> {formatBudget(c.budgetMin, c.budgetMax)}
-                </span>
-              </div>
+                      <td style={{ padding: '11px 14px', fontSize: 12.5, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                        {c.phone
+                          ? <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Phone size={11} /> {c.phone}</span>
+                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      </td>
 
-              {/* Status badge — clickable only if agent owns client */}
-              <button
-                onClick={() => canEdit && cycleStatus(c.id)}
-                style={{
-                  background: 'none', border: 'none',
-                  cursor: canEdit ? 'pointer' : 'default',
-                  padding: 0, flexShrink: 0,
-                }}
-                title={canEdit ? 'Click to change status' : 'You do not own this client'}
-              >
-                <Badge label={c.status} style={sStyle} />
-              </button>
+                      <td style={{ padding: '11px 14px', fontSize: 12.5, color: 'var(--text)', maxWidth: 160 }}>
+                        {c.projectInterest
+                          ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.projectInterest}>
+                              <Building size={11} style={{ flexShrink: 0 }} /> {c.projectInterest}
+                            </span>
+                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      </td>
 
-              {/* Actions — only for owner or Super Admin */}
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                {canEdit ? (
-                  <>
-                    <button
-                      onClick={() => openEdit(c)}
-                      style={iconBtnStyle}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                    >
-                      <Edit3 size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      style={iconBtnStyle}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </>
-                ) : (
-                  <div style={{ width: 66 }} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+                      <td style={{ padding: '11px 14px' }}>
+                        <button
+                          onClick={() => canEdit && cycleStatus(c.id)}
+                          style={{
+                            background: 'none', border: 'none',
+                            cursor: canEdit ? 'pointer' : 'default', padding: 0,
+                          }}
+                          title={canEdit ? 'Click to advance status' : 'You do not own this client'}
+                        >
+                          <Badge label={c.status} style={sStyle} />
+                        </button>
+                      </td>
+
+                      <td style={{ padding: '11px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {c.assignedAgentName
+                          ? <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              fontSize: 11, fontWeight: 600, color: '#7c3aed',
+                              background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)',
+                              padding: '2px 8px', borderRadius: 20,
+                            }}>
+                              <ShieldCheck size={10} /> {c.assignedAgentName}
+                            </span>
+                          : <span style={{ color: 'var(--text-muted)', fontSize: 11, fontStyle: 'italic' }}>Unassigned</span>}
+                      </td>
+
+                      <td style={{ padding: '11px 14px' }}>
+                        <Badge label={c.priority || 'Medium'} style={pStyle} />
+                      </td>
+
+                      <td style={{ padding: '11px 14px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {lastF
+                          ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><CalendarCheck2 size={11} /> {lastF}</span>
+                          : '—'}
+                      </td>
+
+                      <td style={{ padding: '11px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {nextF
+                          ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)' }}><CalendarClock size={11} /> {nextF}</span>
+                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      </td>
+
+                      <td style={{ padding: '11px 14px' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                          {canEdit ? (
+                            <>
+                              <button
+                                onClick={() => openEdit(c)}
+                                style={iconBtnStyle}
+                                onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(c.id)}
+                                style={iconBtnStyle}
+                                onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <div style={{ width: 66 }} />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── MODAL ──────────────────────────────────────────────────────── */}
@@ -528,6 +603,14 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
                 <select value={editing.status} onChange={e => set('status', e.target.value)} style={inputStyle}>
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
+              </Field>
+              <Field label="Priority">
+                <select value={editing.priority} onChange={e => set('priority', e.target.value)} style={inputStyle}>
+                  {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+              <Field label="Project Interest" full>
+                <input value={editing.projectInterest} onChange={e => set('projectInterest', e.target.value)} style={inputStyle} placeholder="e.g. Sunset Residency, Block C" />
               </Field>
               <Field label="Source">
                 <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>

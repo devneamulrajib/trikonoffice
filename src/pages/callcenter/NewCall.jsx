@@ -5,8 +5,8 @@ import {
   MessageCircle, PhoneCall, Users, User, Calendar, Pencil, Trash2,
   Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
-  ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, XCircle,
-  ShieldCheck, Lock, Check, EyeOff, RotateCcw,
+  ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, CalendarCheck2,
+  XCircle, ShieldCheck, Lock, Check, EyeOff, RotateCcw, Hash, Building,
 } from 'lucide-react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -67,6 +67,17 @@ const STATUS_OPTIONS = ['Lead','Contacted','Negotiation','Closed','Lost'];
 const SOURCES        = ['Referral','Walk-in','Website','Facebook','Call Center','Agent Network','Other'];
 const PROPERTY_TYPES = ['Apartment','Villa','Plot/Land','Commercial','Office Space','Townhouse'];
 
+// Status pill styling for the queue table — mirrors the "All Clients" look,
+// but keyed against this page's own status set (Lead/Contacted/Negotiation/
+// Closed/Lost) rather than ManageClients' pipeline labels.
+const CLIENT_STATUS_STYLE = {
+  Lead:        { bg: C.blueBg,   color: C.blue   },
+  Contacted:   { bg: C.yellowBg, color: C.accentDark },
+  Negotiation: { bg: C.purpleBg, color: C.purple },
+  Closed:      { bg: C.greenBg,  color: C.green  },
+  Lost:        { bg: C.redBg,    color: C.red    },
+};
+
 const CALL_OUTCOMES = [
   { value:'Answered',     label:'Answered',    icon: PhoneIncoming, color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
   { value:'Busy',         label:'Busy',         icon: PhoneOff,      color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
@@ -84,11 +95,14 @@ const LEAD_STATUSES = [
 ];
 
 // Priority levels for scheduled follow-ups (matches FollowUp.jsx's High/Medium/Low)
+// Also reused for the queue table's "Priority" column so the styling matches
+// what an agent already sees while logging a call.
 const PRIORITY_LEVELS = [
   { value:'high',   label:'High',   color: C.red,    bg: C.redBg    },
   { value:'medium', label:'Medium', color: C.yellow, bg: C.yellowBg },
   { value:'low',    label:'Low',    color: C.green,  bg: C.greenBg  },
 ];
+const priorityMeta = (p) => PRIORITY_LEVELS.find(x => x.value === String(p||'medium').toLowerCase()) || PRIORITY_LEVELS[1];
 
 // Only Call / WhatsApp as contact method
 const CONTACT_METHODS = ['Call','WhatsApp'];
@@ -132,6 +146,28 @@ const maskPhone = (phone) => {
   if (!str) return '';
   if (str.length <= 5) return str;
   return str.slice(0, 5) + '•'.repeat(str.length - 5);
+};
+
+// ─── Shared list-view helpers (mirrors ManageClients.jsx) ────────────────────
+const norm = (s) => (s || '').toString().trim().toLowerCase();
+
+const leadIdLabel = (id) => `CL-${String(id).slice(-6).padStart(6, '0')}`;
+
+const formatDateShort = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+};
+
+// Builds the small "Land: … / Flat: … / Facing: …" summary used in the
+// Requirements column. Only non-empty fields are included.
+const requirementParts = (c) => {
+  const parts = [];
+  if (c?.reqLand?.trim())   parts.push({ label: 'Land',   value: c.reqLand.trim()   });
+  if (c?.reqFlat?.trim())   parts.push({ label: 'Flat',   value: c.reqFlat.trim()   });
+  if (c?.reqFacing?.trim()) parts.push({ label: 'Facing', value: c.reqFacing.trim() });
+  return parts;
 };
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
@@ -1170,6 +1206,29 @@ const DividerLabel = ({ children }) => (
   </div>
 );
 
+// ─── Requirements cell (queue table) ──────────────────────────────────────────
+// Shows up to 2 requirement fields inline, with a "+N more" tag if there are
+// more, and a title tooltip carrying the full text for anything truncated.
+const RequirementsCell = ({ client }) => {
+  const parts = requirementParts(client);
+  if (parts.length === 0) return <span style={{ color:C.textMuted }}>—</span>;
+  const shown = parts.slice(0, 2);
+  const extra = parts.length - shown.length;
+  const fullTitle = parts.map(p => `${p.label}: ${p.value}`).join(' · ');
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:2, maxWidth:170 }} title={fullTitle}>
+      {shown.map(p => (
+        <div key={p.label} style={{ fontSize:11.5, color:C.textMid, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          <span style={{ fontWeight:700, color:C.textMuted }}>{p.label}:</span> {p.value}
+        </div>
+      ))}
+      {extra > 0 && (
+        <span style={{ fontSize:10.5, color:C.accentDark, fontWeight:700 }}>+{extra} more</span>
+      )}
+    </div>
+  );
+};
+
 // ─── Secondary list table (Calls Logged / Follow-ups / Closed / Dropped) ─────
 // Rendered when a stat box other than "In Queue" is active — reuses the
 // table visual language but with columns tailored to the selected dataset,
@@ -1368,6 +1427,35 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     return Object.entries(map).map(([id, name]) => ({ id, name }));
   }, [queue, isSuperAdmin]);
 
+  // ── Last / Next follow-up per client, for the queue table ────────────────
+  // Mirrors ManageClients.jsx: match this page's followUps entries to a
+  // client by phone first, falling back to name, then pick the most recent
+  // completed follow-up ("Last") and the soonest pending one ("Next").
+  const followupInfo = useMemo(() => {
+    const map = {};
+    allClients.forEach(c => {
+      const phoneKey = norm(c.phone);
+      const nameKey  = norm(c.name);
+      const matches = followUps.filter(f => {
+        const fPhone = norm(f.clientPhone || f.phone);
+        const fName  = norm(f.clientName || f.client);
+        if (phoneKey && fPhone) return fPhone === phoneKey;
+        return nameKey && fName === nameKey;
+      });
+      const completed = matches
+        .filter(f => f.status === 'completed')
+        .sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''));
+      const pending = matches
+        .filter(f => f.status === 'pending')
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+      map[c.id] = {
+        last: completed[0]?.dueDate || null,
+        next: pending[0]?.dueDate || null,
+      };
+    });
+    return map;
+  }, [allClients, followUps]);
+
   // ── Dashboard metrics ──────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     // Calls logged (scoped to this agent, or everyone for Super Admin)
@@ -1446,7 +1534,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       list = list.filter(c =>
         c.name?.toLowerCase().includes(q) || c.phone?.includes(q) ||
         c.propertyType?.toLowerCase().includes(q) || c.source?.toLowerCase().includes(q) ||
-        c.company?.toLowerCase().includes(q) || String(c.id).includes(q)
+        c.company?.toLowerCase().includes(q) || String(c.id).includes(q) ||
+        c.projectInterest?.toLowerCase().includes(q) || leadIdLabel(c.id).toLowerCase().includes(q)
       );
     }
     return list;
@@ -1933,7 +2022,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
             background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:C.r.md }}>
             <Search size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
             <input value={search} onChange={e=>{ setSearch(e.target.value); setPage(1); }}
-              placeholder="Search name, phone, property…"
+              placeholder="Search lead ID, name, phone, property…"
               style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:220 }}/>
             {search && (
               <button onClick={()=>{ setSearch(''); setPage(1); }} style={{ background:'none', border:'none',
@@ -1951,14 +2040,17 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
               <thead>
                 <tr style={{ background:C.surfaceRaised }}>
                   {[
-                    {label:'Client',   align:'left'},
-                    {label:'Phone',    align:'left'},
-                    {label:'Property', align:'left'},
-                    {label:'Source',   align:'left'},
-                    {label:'Type',     align:'left'},
-                    {label:'Added',    align:'left'},
-                    ...(isSuperAdmin ? [{label:'Agent', align:'left'}] : []),
-                    {label:'Actions',  align:'center'},
+                    {label:'Lead ID',          align:'left'},
+                    {label:'Client Name',      align:'left'},
+                    {label:'Mobile',           align:'left'},
+                    {label:'Project Interest', align:'left'},
+                    {label:'Requirements',     align:'left'},
+                    {label:'Status',           align:'left'},
+                    {label:'Agent',            align:'left'},
+                    {label:'Priority',         align:'left'},
+                    {label:'Last Followup',    align:'left'},
+                    {label:'Next Followup',    align:'left'},
+                    {label:'Actions',          align:'center'},
                   ].map(h => (
                     <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
                       fontSize:10.5, fontWeight:700, color:C.textMuted,
@@ -1972,7 +2064,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
               <tbody>
                 {pageItems.length === 0 ? (
                   <tr>
-                    <td colSpan={isSuperAdmin ? 8 : 7} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
+                    <td colSpan={11} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
                       <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
                         display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
                         <Users size={24} style={{ opacity:.4 }}/>
@@ -2002,6 +2094,13 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                     ? (canSeeFullPhone ? item.phone : maskPhone(item.phone))
                     : null;
 
+                  const statusStyle = CLIENT_STATUS_STYLE[item.status] || {};
+                  const pMeta = priorityMeta(item.priority);
+                  const fu = followupInfo[item.id] || {};
+                  const lastF = formatDateShort(fu.last);
+                  const nextF = formatDateShort(fu.next);
+                  const projectInterest = item.projectInterest || item.propertyType;
+
                   return (
                     <tr key={item.id}
                       onMouseEnter={()=>setHoveredRow(item.id)}
@@ -2010,25 +2109,37 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                         background: hovered ? '#FFFDF5' : i%2 ? C.surfaceRaised : 'transparent',
                         transition:'background .1s',
                       }}>
+
+                      {/* Lead ID */}
+                      <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
+                        borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          <Hash size={11}/> {leadIdLabel(item.id)}
+                        </span>
+                      </td>
+
+                      {/* Client Name */}
                       <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`,
-                        maxWidth:240, paddingLeft:0 }}>
+                        maxWidth:220 }}>
                         <div style={{ display:'flex', alignItems:'center' }}>
-                          <div style={{ width:3, height:44, flexShrink:0, borderRadius:2,
-                            background:srcColor, marginRight:13, opacity:.85 }}/>
-                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                            <Avatar name={item.name} size={32}/>
+                          <div style={{ width:3, height:38, flexShrink:0, borderRadius:2,
+                            background:srcColor, marginRight:11, opacity:.85 }}/>
+                          <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+                            <Avatar name={item.name} size={30}/>
                             <div style={{ minWidth:0 }}>
                               <div style={{ fontSize:13.5, fontWeight:600, color:C.text,
                                 overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                                 {item.name}
                               </div>
                               <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>
-                                {item.company || `#${item.id}`}
+                                {item.type || '—'}
                               </div>
                             </div>
                           </div>
                         </div>
                       </td>
+
+                      {/* Mobile */}
                       <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
                         borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
                         {displayPhone ? (
@@ -2044,28 +2155,58 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                           <span style={{ color:C.textMuted }}>—</span>
                         )}
                       </td>
-                      <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
-                        borderBottom:`1px solid ${C.border}99` }}>
-                        {item.propertyType || <span style={{ color:C.textMuted }}>—</span>}
+
+                      {/* Project Interest (falls back to Property type, since
+                          that's the closest equivalent this form collects) */}
+                      <td style={{ padding:'11px 16px', fontSize:12.5, color:C.text,
+                        borderBottom:`1px solid ${C.border}99`, maxWidth:160 }}>
+                        {projectInterest
+                          ? <span style={{ display:'flex', alignItems:'center', gap:5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={projectInterest}>
+                              <Building size={11} style={{ flexShrink:0, color:C.textMuted }}/> {projectInterest}
+                            </span>
+                          : <span style={{ color:C.textMuted }}>—</span>}
                       </td>
+
+                      {/* Requirements */}
                       <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
-                        {item.source ? <SourceTag source={item.source}/> : <span style={{ color:C.textMuted }}>—</span>}
+                        <RequirementsCell client={item}/>
                       </td>
-                      <td style={{ padding:'11px 16px', fontSize:13, color:C.text,
-                        borderBottom:`1px solid ${C.border}99` }}>
-                        {item.type || '—'}
+
+                      {/* Status */}
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                        {item.status
+                          ? <Tag label={item.status} color={statusStyle.color} bg={statusStyle.bg}/>
+                          : <span style={{ color:C.textMuted }}>—</span>}
                       </td>
+
+                      {/* Agent */}
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                        {item.assignedAgentId
+                          ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
+                          : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
+                      </td>
+
+                      {/* Priority */}
+                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
+                        <Tag label={pMeta.label} color={pMeta.color} bg={pMeta.bg}/>
+                      </td>
+
+                      {/* Last Followup */}
                       <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
                         borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}
+                        {lastF
+                          ? <span style={{ display:'flex', alignItems:'center', gap:4 }}><CalendarCheck2 size={11}/> {lastF}</span>
+                          : '—'}
                       </td>
-                      {isSuperAdmin && (
-                        <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
-                          {item.assignedAgentId
-                            ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
-                            : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
-                        </td>
-                      )}
+
+                      {/* Next Followup */}
+                      <td style={{ padding:'11px 16px', fontSize:12, borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
+                        {nextF
+                          ? <span style={{ display:'flex', alignItems:'center', gap:4, color:C.text }}><CalendarClock size={11}/> {nextF}</span>
+                          : <span style={{ color:C.textMuted }}>—</span>}
+                      </td>
+
+                      {/* Actions */}
                       <td style={{ padding:'11px 16px', textAlign:'center',
                         borderBottom:`1px solid ${C.border}99` }}>
                         <div style={{ display:'flex', gap:6, justifyContent:'center' }}>

@@ -1370,6 +1370,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   const [search,       setSearch]       = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [typeFilter,   setTypeFilter]   = useState('All');
+  const [statusFilter,   setStatusFilter]   = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
   const [agentFilter,  setAgentFilter]  = useState('All'); // Super Admin only: 'All' | 'Unclaimed' | agentId
   const [page,         setPage]         = useState(1);
   const [pageSize,     setPageSize]     = useState(10);
@@ -1529,6 +1531,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
         ? list.filter(c => isUnassigned(c))
         : list.filter(c => c.assignedAgentId === agentFilter);
     }
+    if (statusFilter !== 'All') list = list.filter(c => c.status === statusFilter);
+    if (priorityFilter !== 'All') list = list.filter(c => priorityMeta(c.priority).value === priorityFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c =>
@@ -1539,7 +1543,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       );
     }
     return list;
-  }, [queue, search, sourceFilter, typeFilter, agentFilter, isSuperAdmin]);
+  }, [queue, search, sourceFilter, typeFilter, agentFilter, statusFilter, priorityFilter, isSuperAdmin]);
 
   // Whichever dataset the active stat box points to — this is what actually
   // gets paginated and rendered in the table card below.
@@ -1552,10 +1556,10 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   const totalPages = Math.max(1, Math.ceil(displayItems.length / pageSize));
   const pageItems  = displayItems.slice((page-1)*pageSize, page*pageSize);
 
-  const noFiltersActive = statView === 'queue' && sourceFilter === 'All' && typeFilter === 'All' && agentFilter === 'All' && !search.trim();
+  const noFiltersActive = statView === 'queue' && sourceFilter === 'All' && typeFilter === 'All' && agentFilter === 'All' && statusFilter === 'All' && priorityFilter === 'All' && !search.trim();
 
   const clearAllFilters = () => {
-    setSourceFilter('All'); setTypeFilter('All'); setAgentFilter('All'); setSearch(''); setPage(1); setStatView('queue');
+    setSourceFilter('All'); setTypeFilter('All'); setAgentFilter('All'); setStatusFilter('All'); setPriorityFilter('All'); setSearch(''); setPage(1); setStatView('queue');
   };
 
   const toggleStatView = (key) => {
@@ -1964,6 +1968,18 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                   {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </Select>
               </div>
+              <div style={{ minWidth:170 }}>
+                <Select value={statusFilter} onChange={e=>{ setStatusFilter(e.target.value); setPage(1); }}>
+                  <option value="All">All Statuses</option>
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </div>
+              <div style={{ minWidth:170 }}>
+                <Select value={priorityFilter} onChange={e=>{ setPriorityFilter(e.target.value); setPage(1); }}>
+                  <option value="All">All Priorities</option>
+                  {PRIORITY_LEVELS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </Select>
+              </div>
               {isSuperAdmin && (
                 <div style={{ minWidth:190 }}>
                   <Select value={agentFilter} onChange={e=>{ setAgentFilter(e.target.value); setPage(1); }}>
@@ -1973,8 +1989,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                   </Select>
                 </div>
               )}
-              {(typeFilter !== 'All' || (isSuperAdmin && agentFilter !== 'All')) && (
-                <button onClick={()=>{ setTypeFilter('All'); setAgentFilter('All'); setPage(1); }} style={{
+              {(typeFilter !== 'All' || statusFilter !== 'All' || priorityFilter !== 'All' || (isSuperAdmin && agentFilter !== 'All')) && (
+                <button onClick={()=>{ setTypeFilter('All'); setStatusFilter('All'); setPriorityFilter('All'); setAgentFilter('All'); setPage(1); }} style={{
                   display:'inline-flex', alignItems:'center', gap:6, background:'none',
                   border:`1.5px solid ${C.border}`, borderRadius:C.r.md, padding:'9px 14px',
                   fontSize:12.5, fontWeight:600, color:C.textMid, cursor:'pointer',

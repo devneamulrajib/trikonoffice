@@ -755,8 +755,6 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
   const isFirstCall      = !lead.calledAt;
   const canEditDetails   = isSuperAdmin || isFirstCall;
 
-  const reqSummary = [lead.reqLand,lead.reqFlat,lead.reqFacing].filter(Boolean).join(' · ');
-
   // Offers is now an array of selected OFFER_OPTIONS values (multi-select).
   const selectedOffers = Array.isArray(lead.offers) ? lead.offers : [];
   const hasOther = selectedOffers.includes('other');
@@ -881,7 +879,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
           >
             {canEditDetails ? (
               <>
-                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:14,
+                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:16,
                   padding:'8px 12px', borderRadius:C.r.md, background:C.greenBg, border:`1px solid ${C.greenBorder}` }}>
                   <ShieldCheck size={14} color={C.green}/>
                   <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
@@ -890,11 +888,25 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
                       : 'This is your first time taking this call — you can correct any client details below.'}
                   </span>
                 </div>
-                <Grid cols="repeat(3,1fr)">
+
+                <DividerLabel>Basic Info</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
                   <div style={{ gridColumn:'1/-1' }}>
                     <FieldLabel required>Full name</FieldLabel>
                     <Input value={lead.name||''} onChange={e=>onChange('name',e.target.value)}/>
                   </div>
+                  <div>
+                    <FieldLabel>Profession</FieldLabel>
+                    <Input value={lead.profession||''} onChange={e=>onChange('profession',e.target.value)}/>
+                  </div>
+                  <div style={{ gridColumn:'2 / span 2' }}>
+                    <FieldLabel>Company</FieldLabel>
+                    <Input value={lead.company||''} onChange={e=>onChange('company',e.target.value)}/>
+                  </div>
+                </Grid>
+
+                <DividerLabel>Contact Info</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
                   <div>
                     <FieldLabel required>Phone</FieldLabel>
                     <Input value={lead.phone||''} onChange={e=>onChange('phone',e.target.value)} placeholder="01XXXXXXXXX"/>
@@ -907,14 +919,10 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
                     <FieldLabel>Email</FieldLabel>
                     <Input value={lead.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@example.com"/>
                   </div>
-                  <div>
-                    <FieldLabel>Profession</FieldLabel>
-                    <Input value={lead.profession||''} onChange={e=>onChange('profession',e.target.value)}/>
-                  </div>
-                  <div>
-                    <FieldLabel>Company</FieldLabel>
-                    <Input value={lead.company||''} onChange={e=>onChange('company',e.target.value)}/>
-                  </div>
+                </Grid>
+
+                <DividerLabel>Deal Info</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
                   <div style={{ gridColumn:'1/-1' }}>
                     <FieldLabel>Address</FieldLabel>
                     <Input value={lead.address||''} onChange={e=>onChange('address',e.target.value)}/>
@@ -932,27 +940,61 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
                     <Input value={lead.location||''} onChange={e=>onChange('location',e.target.value)} placeholder="Gulshan, Dhaka"/>
                   </div>
                 </Grid>
+
+                <DividerLabel>Requirements</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10 }}>
+                  <div>
+                    <FieldLabel>Land requirement</FieldLabel>
+                    <Input value={lead.reqLand||''} onChange={e=>onChange('reqLand',e.target.value)} placeholder="e.g. 5 katha land"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Flat requirement</FieldLabel>
+                    <Input value={lead.reqFlat||''} onChange={e=>onChange('reqFlat',e.target.value)} placeholder="e.g. 1500 sft flat"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Facing preference</FieldLabel>
+                    <Input value={lead.reqFacing||''} onChange={e=>onChange('reqFacing',e.target.value)} placeholder="South faced, Corner plot…"/>
+                  </div>
+                </Grid>
               </>
             ) : (
-              <Grid cols="repeat(3,1fr)">
-                {[
-                  {label:'Phone',      value:lead.phone},
-                  {label:'Alt. number',value:lead.altPhone},
-                  {label:'Email',      value:lead.email},
-                  {label:'Address',    value:lead.address},
-                  {label:'Profession', value:lead.profession},
-                  {label:'Company',    value:lead.company},
-                  {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
-                  {label:'Location',   value:lead.location},
-                ].map(f=>(
-                  <div key={f.label}>
-                    <FieldLabel>{f.label}</FieldLabel>
-                    <ROField value={f.value}/>
+              <>
+                <DividerLabel>Contact & Deal Info</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
+                  {[
+                    {label:'Phone',      value:lead.phone},
+                    {label:'Alt. number',value:lead.altPhone},
+                    {label:'Email',      value:lead.email},
+                    {label:'Address',    value:lead.address},
+                    {label:'Profession', value:lead.profession},
+                    {label:'Company',    value:lead.company},
+                    {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
+                    {label:'Location',   value:lead.location},
+                  ].map(f=>(
+                    <div key={f.label}>
+                      <FieldLabel>{f.label}</FieldLabel>
+                      <ROField value={f.value}/>
+                    </div>
+                  ))}
+                </Grid>
+
+                <DividerLabel>Requirements</DividerLabel>
+                <Grid cols="repeat(3,1fr)" style={{ marginTop:10 }}>
+                  <div>
+                    <FieldLabel>Land requirement</FieldLabel>
+                    <ROField value={lead.reqLand}/>
                   </div>
-                ))}
-              </Grid>
+                  <div>
+                    <FieldLabel>Flat requirement</FieldLabel>
+                    <ROField value={lead.reqFlat}/>
+                  </div>
+                  <div>
+                    <FieldLabel>Facing preference</FieldLabel>
+                    <ROField value={lead.reqFacing}/>
+                  </div>
+                </Grid>
+              </>
             )}
-            {reqSummary && <div style={{ marginTop:14 }}><FieldLabel>Requirements</FieldLabel><ROField value={reqSummary}/></div>}
           </Collapse>
 
           <Grid cols="1fr 1fr" gap={16}>
@@ -1465,7 +1507,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   // this call — always forwarded to logCallOnClient. When editing wasn't
   // permitted (locked, non-first call, non-admin) these are simply the
   // same values the client already had, so nothing changes.
-  const CLIENT_EDITABLE_KEYS = ['name','phone','altPhone','email','profession','company','address','budgetMin','budgetMax','location'];
+  const CLIENT_EDITABLE_KEYS = ['name','phone','altPhone','email','profession','company','address','budgetMin','budgetMax','location','reqLand','reqFlat','reqFacing'];
 
   const submitCall = async () => {
     if (!activeLead) return;

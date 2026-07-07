@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, X, Plus, Search, ChevronLeft, ChevronRight, ChevronDown,
   Calendar, CalendarClock, Pencil, Trash2, MapPin, CheckCircle2, CheckCheck,
   XCircle, History, Send, ShieldCheck, AlertCircle, Users, ArrowRight,
-  MessageCircle, Clock,
+  MessageCircle, Clock, Filter, RotateCcw,
 } from 'lucide-react';
 
 // ─── Design tokens (matches NewCall.jsx) ──────────────────────────────────────
@@ -47,6 +47,14 @@ const STATUS_CONFIG = {
   completed:   { label: 'Completed',   color: C.green,  bg: C.greenBg  },
   missed:      { label: 'Missed',      color: C.red,    bg: C.redBg    },
   rescheduled: { label: 'Rescheduled', color: C.blue,   bg: C.blueBg   },
+};
+
+// Pseudo-statuses used only for the clickable stat boxes / filter state —
+// they aren't real values stored on the record, they're derived from
+// status + dueDate.
+const PSEUDO_STATUS_CONFIG = {
+  overdue:   { label: 'Overdue',   color: C.red,  bg: C.redBg  },
+  due_today: { label: 'Due Today', color: C.blue, bg: C.blueBg },
 };
 
 const LEAD_STATUS_CONFIG = {
@@ -779,8 +787,20 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     return allClients.filter(c => c.assignedAgentId === myAgentId);
   }, [allClients, isSuperAdmin, myAgentId]);
 
+  // Build the Super Admin "Agent" filter options from the follow-up records themselves.
+  const agentOptions = useMemo(() => {
+    if (!isSuperAdmin) return [];
+    const map = {};
+    allFollowUps.forEach(f => {
+      if (f.agentId && f.agentName) map[f.agentId] = f.agentName;
+    });
+    return Object.entries(map).map(([id, name]) => ({ id, name }));
+  }, [allFollowUps, isSuperAdmin]);
+
   const [search, setSearch]             = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All'); // status | 'overdue' | 'due_today' | 'All'
+  const [filterPriority, setFilterPriority] = useState('All');
+  const [filterAgent, setFilterAgent]   = useState('All');
   const [sortBy, setSortBy]             = useState('due_asc');
   const [viewTab, setViewTab]           = useState('all');
   const [page, setPage]                 = useState(1);
@@ -812,13 +832,27 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     return c;
   }, [followUps]);
 
+  // A single predicate so the stat boxes, the status chips, and the table
+  // filtering all agree on what each filter value means (including the two
+  // pseudo-statuses — overdue / due_today — which aren't real stored values).
+  const matchesStatusFilter = (f) => {
+    if (filterStatus === 'All') return true;
+    if (filterStatus === 'overdue')   return f.status === 'pending' && f.dueDate < today;
+    if (filterStatus === 'due_today') return f.status === 'pending' && f.dueDate === today;
+    return f.status === filterStatus;
+  };
+
   const filtered = useMemo(() => {
     let list = [...followUps];
     if (viewTab === 'previous') list = list.filter(f => f.dueDate < today);
     else if (viewTab === 'today') list = list.filter(f => f.dueDate === today);
     else if (viewTab === 'upcoming') list = list.filter(f => f.dueDate > today);
 
-    if (filterStatus !== 'All') list = list.filter(f => f.status === filterStatus);
+    list = list.filter(matchesStatusFilter);
+
+    if (filterPriority !== 'All') list = list.filter(f => f.priority === filterPriority);
+
+    if (isSuperAdmin && filterAgent !== 'All') list = list.filter(f => f.agentId === filterAgent);
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -840,7 +874,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
       return 0;
     });
     return list;
-  }, [followUps, viewTab, filterStatus, search, sortBy, today]);
+  }, [followUps, viewTab, filterStatus, filterPriority, filterAgent, isSuperAdmin, search, sortBy, today]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems  = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -849,6 +883,17 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     setViewTab(key); setPage(1);
     if (key === 'previous') setSortBy('due_desc');
     else if (key === 'upcoming') setSortBy('due_asc');
+  };
+
+  const toggleStatBox = (key) => {
+    setFilterStatus(prev => prev === key ? 'All' : key);
+    setPage(1);
+  };
+
+  const clearMoreFilters = () => {
+    setFilterPriority('All');
+    setFilterAgent('All');
+    setPage(1);
   };
 
   const updateFU = (id, patch) => {
@@ -941,6 +986,8 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
     .filter(p => Math.abs(p - page) <= 2 || p === 1 || p === totalPages)
     .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push('…'); acc.push(p); return acc; }, []);
 
+  const moreFiltersActive = filterPriority !== 'All' || (isSuperAdmin && filterAgent !== 'All');
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .2 }}
       style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif', color: C.text }}>
@@ -975,13 +1022,18 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
         </PrimaryBtn>
       </div>
 
-      {/* Stat boxes */}
+      {/* Stat boxes — click one to filter the table below (click again to clear) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 10 }}>
-        <StatBox icon={Users}         label="Total"      value={stats.total}     color={C.textMid}   bg={C.surfaceRaised} border={C.border} />
-        <StatBox icon={Clock}         label="Pending"    value={stats.pending}   color={C.yellow}    bg={C.yellowBg}     border={C.yellowBorder} />
-        <StatBox icon={AlertCircle}   label="Overdue"    value={stats.overdue}   color={C.red}       bg={C.redBg}        border={C.redBorder} />
-        <StatBox icon={Calendar}      label="Due Today"  value={stats.dueToday}  color={C.blue}      bg={C.blueBg}       border={C.blueBorder} />
-        <StatBox icon={CheckCheck}    label="Completed"  value={stats.completed} color={C.green}     bg={C.greenBg}      border={C.greenBorder} />
+        <StatBox icon={Users}       label="Total"     value={stats.total}     color={C.textMid} bg={C.surfaceRaised} border={C.border}
+          active={filterStatus === 'All'} onClick={() => toggleStatBox('All')} />
+        <StatBox icon={Clock}       label="Pending"   value={stats.pending}   color={C.yellow} bg={C.yellowBg} border={C.yellowBorder}
+          active={filterStatus === 'pending'} onClick={() => toggleStatBox('pending')} />
+        <StatBox icon={AlertCircle} label="Overdue"   value={stats.overdue}   color={C.red} bg={C.redBg} border={C.redBorder}
+          active={filterStatus === 'overdue'} onClick={() => toggleStatBox('overdue')} />
+        <StatBox icon={Calendar}    label="Due Today" value={stats.dueToday}  color={C.blue} bg={C.blueBg} border={C.blueBorder}
+          active={filterStatus === 'due_today'} onClick={() => toggleStatBox('due_today')} />
+        <StatBox icon={CheckCheck}  label="Completed" value={stats.completed} color={C.green} bg={C.greenBg} border={C.greenBorder}
+          active={filterStatus === 'completed'} onClick={() => toggleStatBox('completed')} />
       </div>
 
       {/* Status filter chips */}
@@ -1014,6 +1066,56 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
               </button>
             );
           })}
+          {(filterStatus === 'overdue' || filterStatus === 'due_today') && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 15px',
+              borderRadius: C.r.full, fontSize: 12.5, fontWeight: 700,
+              border: `1.5px solid ${PSEUDO_STATUS_CONFIG[filterStatus].color}`,
+              background: PSEUDO_STATUS_CONFIG[filterStatus].bg,
+              color: PSEUDO_STATUS_CONFIG[filterStatus].color,
+            }}>
+              {PSEUDO_STATUS_CONFIG[filterStatus].label}
+              <button onClick={() => setFilterStatus('All')} style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: 'inherit',
+                display: 'flex', padding: 0,
+              }}>
+                <X size={12} />
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Priority + Agent filters */}
+      <div style={{ marginBottom: 16 }}>
+        <DividerLabel>More filters</DividerLabel>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+          <div style={{ minWidth: 170, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Filter size={13} style={{ color: C.textMuted, flexShrink: 0 }} />
+            <Select value={filterPriority} onChange={e => { setFilterPriority(e.target.value); setPage(1); }}>
+              <option value="All">All Priorities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </Select>
+          </div>
+          {isSuperAdmin && (
+            <div style={{ minWidth: 190 }}>
+              <Select value={filterAgent} onChange={e => { setFilterAgent(e.target.value); setPage(1); }}>
+                <option value="All">All Agents</option>
+                {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </div>
+          )}
+          {moreFiltersActive && (
+            <button onClick={clearMoreFilters} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none',
+              border: `1.5px solid ${C.border}`, borderRadius: C.r.md, padding: '9px 14px',
+              fontSize: 12.5, fontWeight: 600, color: C.textMid, cursor: 'pointer',
+            }}>
+              <RotateCcw size={12} /> Clear
+            </button>
+          )}
         </div>
       </div>
 

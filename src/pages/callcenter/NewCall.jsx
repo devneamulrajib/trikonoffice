@@ -6,7 +6,7 @@ import {
   Briefcase, MapPin, CheckCircle2, Filter, Gift, Home, Compass,
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
   ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, XCircle,
-  ShieldCheck, Lock, Check, EyeOff,
+  ShieldCheck, Lock, Check, EyeOff, RotateCcw,
 } from 'lucide-react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -1132,6 +1132,8 @@ const DividerLabel = ({ children }) => (
 const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteClient, logCallOnClient }) => {
   const [search,       setSearch]       = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
+  const [typeFilter,   setTypeFilter]   = useState('All');
+  const [agentFilter,  setAgentFilter]  = useState('All'); // Super Admin only: 'All' | 'Unclaimed' | agentId
   const [page,         setPage]         = useState(1);
   const [pageSize,     setPageSize]     = useState(10);
   const [activeLead,   setActiveLead]   = useState(null);
@@ -1174,6 +1176,17 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   const myCallLogs  = useMemo(() => isSuperAdmin ? callLogs  : callLogs.filter(l => l.agentId === myAgentId),  [callLogs, isSuperAdmin, myAgentId]);
   const myFollowUps = useMemo(() => isSuperAdmin ? followUps : followUps.filter(f => f.agentId === myAgentId), [followUps, isSuperAdmin, myAgentId]);
 
+  // Super-Admin-only "Agent" filter options, built from whoever currently
+  // has claimed a client that's still sitting in the queue (uncalled).
+  const agentOptions = useMemo(() => {
+    if (!isSuperAdmin) return [];
+    const map = {};
+    queue.forEach(c => {
+      if (c.assignedAgentId && c.assignedAgentName) map[c.assignedAgentId] = c.assignedAgentName;
+    });
+    return Object.entries(map).map(([id, name]) => ({ id, name }));
+  }, [queue, isSuperAdmin]);
+
   // ── Dashboard metrics ──────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     // Calls logged (scoped to this agent, or everyone for Super Admin)
@@ -1198,6 +1211,12 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
   // ── Filtered table list ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let list = sourceFilter === 'All' ? queue : queue.filter(c => c.source === sourceFilter);
+    if (typeFilter !== 'All') list = list.filter(c => c.type === typeFilter);
+    if (isSuperAdmin && agentFilter !== 'All') {
+      list = agentFilter === 'Unclaimed'
+        ? list.filter(c => isUnassigned(c))
+        : list.filter(c => c.assignedAgentId === agentFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c =>
@@ -1207,10 +1226,16 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       );
     }
     return list;
-  }, [queue, search, sourceFilter]);
+  }, [queue, search, sourceFilter, typeFilter, agentFilter, isSuperAdmin]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems  = filtered.slice((page-1)*pageSize, page*pageSize);
+
+  const noFiltersActive = sourceFilter === 'All' && typeFilter === 'All' && agentFilter === 'All' && !search.trim();
+
+  const clearAllFilters = () => {
+    setSourceFilter('All'); setTypeFilter('All'); setAgentFilter('All'); setSearch(''); setPage(1);
+  };
 
   const openTakeCall = lead => setActiveLead({
     ...lead, coComment:'', coStatus:'', coMethod:'Call',
@@ -1424,10 +1449,15 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
 
       {/* ══════════════════════════════════════════════════════════════════════
           ── ROW 1: Key metrics ──────────────────────────────────────────────
+          Only "In Queue" is clickable — it's the only metric that describes
+          this table (Calls Logged / Follow-ups / Closed / Dropped all refer
+          to clients that have already left the queue, so filtering this
+          table by them would just always show zero rows). Clicking it clears
+          every filter below and jumps back to the full queue.
       ══════════════════════════════════════════════════════════════════════ */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:10 }}>
 
-        {/* Total in queue */}
+        {/* Total in queue — clickable, clears all filters */}
         <StatBox
           icon={Phone}
           label="In Queue"
@@ -1436,6 +1466,8 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           bg={C.accentLight}
           border={C.accentBorder}
           sublabel="Awaiting first call"
+          active={noFiltersActive}
+          onClick={clearAllFilters}
         />
 
         {/* Calls logged */}
@@ -1543,6 +1575,40 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           </div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          ── ROW 3: More filters (Client Type + Agent for Super Admin) ───────
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div style={{ marginBottom:20 }}>
+        <DividerLabel>More filters</DividerLabel>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
+          <div style={{ minWidth:170, display:'flex', alignItems:'center', gap:6 }}>
+            <Filter size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
+            <Select value={typeFilter} onChange={e=>{ setTypeFilter(e.target.value); setPage(1); }}>
+              <option value="All">All Types</option>
+              {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </div>
+          {isSuperAdmin && (
+            <div style={{ minWidth:190 }}>
+              <Select value={agentFilter} onChange={e=>{ setAgentFilter(e.target.value); setPage(1); }}>
+                <option value="All">All Agents</option>
+                <option value="Unclaimed">Unclaimed</option>
+                {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </div>
+          )}
+          {(typeFilter !== 'All' || (isSuperAdmin && agentFilter !== 'All')) && (
+            <button onClick={()=>{ setTypeFilter('All'); setAgentFilter('All'); setPage(1); }} style={{
+              display:'inline-flex', alignItems:'center', gap:6, background:'none',
+              border:`1.5px solid ${C.border}`, borderRadius:C.r.md, padding:'9px 14px',
+              fontSize:12.5, fontWeight:600, color:C.textMid, cursor:'pointer',
+            }}>
+              <RotateCcw size={12}/> Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* ── Table card ── */}
       <div style={{ background:C.surface, border:`1px solid ${C.border}`,

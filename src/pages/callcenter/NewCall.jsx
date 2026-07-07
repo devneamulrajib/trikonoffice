@@ -230,6 +230,23 @@ const GhostBtn = ({ children, onClick, style }) => (
   </button>
 );
 
+// Danger-tinted button used for destructive-ish but non-modal actions (e.g.
+// "Drop call"). Same shape/size as GhostBtn but red-themed, and supports a
+// "confirming" state that fills solid red to force a deliberate second click.
+const DangerGhostBtn = ({ children, onClick, confirming, style }) => (
+  <button onClick={onClick} style={{
+    display:'inline-flex', alignItems:'center', gap:6, padding:'9px 18px',
+    borderRadius:C.r.md, fontSize:13.5, fontWeight:700, cursor:'pointer',
+    border:`1.5px solid ${confirming ? C.red : C.redBorder}`,
+    background: confirming ? C.red : C.redBg,
+    color: confirming ? '#fff' : C.red,
+    boxShadow: confirming ? `0 2px 10px ${C.red}44` : 'none',
+    transition:'all .13s', ...style,
+  }}>
+    {children}
+  </button>
+);
+
 const IconAction = ({ icon: Icon, onClick, title, variant='default', disabled }) => {
   const variants = {
     default: { bg:'#F1F5F9', color:'#475569' },
@@ -290,7 +307,7 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) => {
+const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children, action }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ border:`1px solid ${C.border}`, borderRadius:C.r.lg, overflow:'hidden' }}>
@@ -306,7 +323,10 @@ const Collapse = ({ title, icon: Icon, defaultOpen=false, summary, children }) =
             <span style={{ fontSize:12, color:C.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{summary}</span>
           )}
         </span>
-        <ChevronDown size={14} style={{ color:C.textMuted, transition:'transform .2s', transform:open?'rotate(180deg)':'none', flexShrink:0 }}/>
+        <span style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+          {action}
+          <ChevronDown size={14} style={{ color:C.textMuted, transition:'transform .2s', transform:open?'rotate(180deg)':'none' }}/>
+        </span>
       </button>
       {open && <div style={{ padding:16, borderTop:`1px solid ${C.border}` }}>{children}</div>}
     </div>
@@ -718,13 +738,24 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
 );
 
 // ─── Take Call Modal ──────────────────────────────────────────────────────────
-const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
+const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
   const [fuOn, setFuOn] = useState(Boolean(lead.followupDate));
   const [attempted, setAttempted] = useState(false); // becomes true after a failed "Log call" click
+  const [dropConfirm, setDropConfirm] = useState(false); // becomes true after first "Drop call" click, awaiting confirmation
   const toggleFu = () => { const n=!fuOn; setFuOn(n); if(!n) onChange('followupDate',''); };
-  const reqSummary = [lead.reqLand,lead.reqFlat,lead.reqFacing].filter(Boolean).join(' · ');
   const telLink = lead.phone ? `tel:${lead.phone}` : null;
   const waLink  = lead.phone ? `https://wa.me/${String(lead.phone).replace(/[^0-9]/g,'')}` : null;
+
+  // ── Client-detail edit permission ───────────────────────────────────────
+  // Regular agents can only edit the client's core details the FIRST time
+  // they ever take this call — i.e. before `calledAt` has been set. Once the
+  // call has been logged once, those fields lock for them. Super Admin can
+  // always edit, any number of times.
+  const isSuperAdmin     = user?.role === 'superadmin';
+  const isFirstCall      = !lead.calledAt;
+  const canEditDetails   = isSuperAdmin || isFirstCall;
+
+  const reqSummary = [lead.reqLand,lead.reqFlat,lead.reqFacing].filter(Boolean).join(' · ');
 
   // Offers is now an array of selected OFFER_OPTIONS values (multi-select).
   const selectedOffers = Array.isArray(lead.offers) ? lead.offers : [];
@@ -755,6 +786,22 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
   const handleSubmitClick = () => {
     if (!ready) { setAttempted(true); return; }
     onSubmit();
+  };
+
+  // ── Drop call ────────────────────────────────────────────────────────────
+  // Lets an agent bail out of a call immediately — e.g. the customer said
+  // they're not interested and hung up — without having to fill in every
+  // section of the form the way a normal "Log call" requires. Requires one
+  // extra click to confirm (button flips to a solid "Confirm drop?" state
+  // for 3 seconds) so it can't be hit by accident.
+  const handleDropClick = () => {
+    if (!dropConfirm) {
+      setDropConfirm(true);
+      setTimeout(() => setDropConfirm(false), 3000);
+      return;
+    }
+    setDropConfirm(false);
+    onDrop?.();
   };
 
   const errBox = { borderColor: C.red, boxShadow: `0 0 0 3px ${C.red}18` };
@@ -816,25 +863,95 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
             )}
           </div>
 
-          <Collapse title="Client details" icon={User}
-            summary={[lead.phone,lead.email].filter(Boolean).join(' · ')}>
-            <Grid cols="repeat(3,1fr)">
-              {[
-                {label:'Phone',      value:lead.phone},
-                {label:'Alt. number',value:lead.altPhone},
-                {label:'Email',      value:lead.email},
-                {label:'Address',    value:lead.address},
-                {label:'Profession', value:lead.profession},
-                {label:'Company',    value:lead.company},
-                {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
-                {label:'Location',   value:lead.location},
-              ].map(f=>(
-                <div key={f.label}>
-                  <FieldLabel>{f.label}</FieldLabel>
-                  <ROField value={f.value}/>
+          <Collapse
+            title="Client details"
+            icon={User}
+            defaultOpen={canEditDetails}
+            summary={[lead.phone,lead.email].filter(Boolean).join(' · ')}
+            action={
+              canEditDetails ? (
+                <Tag
+                  label={isSuperAdmin ? 'Editable — Super Admin' : 'Editable — first call'}
+                  color={C.green} bg={C.greenBg} border={C.greenBorder}
+                />
+              ) : (
+                <Tag label="Locked after first call" color={C.slate} bg={C.slateBg} border={C.slateBorder} />
+              )
+            }
+          >
+            {canEditDetails ? (
+              <>
+                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:14,
+                  padding:'8px 12px', borderRadius:C.r.md, background:C.greenBg, border:`1px solid ${C.greenBorder}` }}>
+                  <ShieldCheck size={14} color={C.green}/>
+                  <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
+                    {isSuperAdmin
+                      ? 'As Super Admin you can always edit this client\'s details.'
+                      : 'This is your first time taking this call — you can correct any client details below.'}
+                  </span>
                 </div>
-              ))}
-            </Grid>
+                <Grid cols="repeat(3,1fr)">
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <FieldLabel required>Full name</FieldLabel>
+                    <Input value={lead.name||''} onChange={e=>onChange('name',e.target.value)}/>
+                  </div>
+                  <div>
+                    <FieldLabel required>Phone</FieldLabel>
+                    <Input value={lead.phone||''} onChange={e=>onChange('phone',e.target.value)} placeholder="01XXXXXXXXX"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Alt. number</FieldLabel>
+                    <Input value={lead.altPhone||''} onChange={e=>onChange('altPhone',e.target.value)} placeholder="01XXXXXXXXX"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Email</FieldLabel>
+                    <Input value={lead.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@example.com"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Profession</FieldLabel>
+                    <Input value={lead.profession||''} onChange={e=>onChange('profession',e.target.value)}/>
+                  </div>
+                  <div>
+                    <FieldLabel>Company</FieldLabel>
+                    <Input value={lead.company||''} onChange={e=>onChange('company',e.target.value)}/>
+                  </div>
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <FieldLabel>Address</FieldLabel>
+                    <Input value={lead.address||''} onChange={e=>onChange('address',e.target.value)}/>
+                  </div>
+                  <div>
+                    <FieldLabel>Budget min</FieldLabel>
+                    <Input type="number" value={lead.budgetMin||''} onChange={e=>onChange('budgetMin',e.target.value)} placeholder="0"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Budget max</FieldLabel>
+                    <Input type="number" value={lead.budgetMax||''} onChange={e=>onChange('budgetMax',e.target.value)} placeholder="0"/>
+                  </div>
+                  <div>
+                    <FieldLabel>Location</FieldLabel>
+                    <Input value={lead.location||''} onChange={e=>onChange('location',e.target.value)} placeholder="Gulshan, Dhaka"/>
+                  </div>
+                </Grid>
+              </>
+            ) : (
+              <Grid cols="repeat(3,1fr)">
+                {[
+                  {label:'Phone',      value:lead.phone},
+                  {label:'Alt. number',value:lead.altPhone},
+                  {label:'Email',      value:lead.email},
+                  {label:'Address',    value:lead.address},
+                  {label:'Profession', value:lead.profession},
+                  {label:'Company',    value:lead.company},
+                  {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
+                  {label:'Location',   value:lead.location},
+                ].map(f=>(
+                  <div key={f.label}>
+                    <FieldLabel>{f.label}</FieldLabel>
+                    <ROField value={f.value}/>
+                  </div>
+                ))}
+              </Grid>
+            )}
             {reqSummary && <div style={{ marginTop:14 }}><FieldLabel>Requirements</FieldLabel><ROField value={reqSummary}/></div>}
           </Collapse>
 
@@ -973,6 +1090,9 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, user }) => {
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <GhostBtn onClick={onClose}>Close</GhostBtn>
+            <DangerGhostBtn onClick={handleDropClick} confirming={dropConfirm}>
+              <PhoneOff size={14}/> {dropConfirm ? 'Confirm drop?' : 'Drop call'}
+            </DangerGhostBtn>
             <PrimaryBtn onClick={handleSubmitClick}>
               {fuOn ? 'Log call & schedule follow-up' : 'Log call'}
               <ArrowRight size={14}/>
@@ -1121,6 +1241,12 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
 
   const followupPriorityMap = { Priority:'high', 'Site Visit':'medium', Regular:'low' };
 
+  // Fields the agent may have edited in the "Client details" panel during
+  // this call — always forwarded to logCallOnClient. When editing wasn't
+  // permitted (locked, non-first call, non-admin) these are simply the
+  // same values the client already had, so nothing changes.
+  const CLIENT_EDITABLE_KEYS = ['name','phone','altPhone','email','profession','company','address','budgetMin','budgetMax','location'];
+
   const submitCall = async () => {
     if (!activeLead) return;
     const now = new Date().toISOString();
@@ -1153,11 +1279,17 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
     else if (activeLead.callStatus === 'Not Interested') nextClientStatus = 'Contacted';
     else if (activeLead.callStatus === 'Followup')       nextClientStatus = 'Contacted';
 
+    // Pull forward any client-detail edits made in this call (harmless if
+    // unchanged — see CLIENT_EDITABLE_KEYS comment above).
+    const clientDetailPatch = {};
+    CLIENT_EDITABLE_KEYS.forEach(k => { clientDetailPatch[k] = activeLead[k]; });
+
     // Client status/calledAt now live in the clients table — persist via the
     // dedicated endpoint instead of the whole-blob PUT.
     const updatedClient = await logCallOnClient(activeLead.id, {
       status: nextClientStatus,
       calledAt: now,
+      ...clientDetailPatch,
     });
 
     const hasFu = Boolean(activeLead.followupDate);
@@ -1192,6 +1324,49 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
       return next;
     });
     logAction?.(hasFu?'Took call & scheduled follow-up':'Took call','Call',activeLead.name);
+    setActiveLead(null);
+  };
+
+  // ── Drop call ────────────────────────────────────────────────────────────
+  // Fast-path exit from the Take Call modal: doesn't require any of the
+  // normal "every section filled" validation. Logs a call-log entry with
+  // outcome/lead-status forced to "Dropped", marks the client Lost, and
+  // never schedules a follow-up (there's nothing to follow up on).
+  const dropCall = async () => {
+    if (!activeLead) return;
+    const now = new Date().toISOString();
+
+    const entry = {
+      id:Date.now(), clientId:activeLead.id, clientName:activeLead.name, phone:activeLead.phone,
+      email:activeLead.email||'',
+      subject:`${activeLead.propertyType||''} — Lead follow-up`.trim(),
+      priority:'medium',
+      notes: activeLead.coComment?.trim() || 'Call dropped — customer was not interested.',
+      agent: myAgentName, agentId: myAgentId, type:'inbound', duration:0,
+      date:new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}),
+      timestamp:now, propertyType:activeLead.propertyType, source:activeLead.source,
+      callStatus:'Dropped', callOutcome: activeLead.coStatus || 'Dropped',
+      callMethod:activeLead.coMethod || 'Call', offer:'',
+    };
+
+    // Pull forward any client-detail edits made before the drop (harmless if
+    // unchanged — see CLIENT_EDITABLE_KEYS comment above submitCall).
+    const clientDetailPatch = {};
+    CLIENT_EDITABLE_KEYS.forEach(k => { clientDetailPatch[k] = activeLead[k]; });
+
+    const updatedClient = await logCallOnClient(activeLead.id, {
+      status: 'Lost',
+      calledAt: now,
+      ...clientDetailPatch,
+    });
+
+    setDb(prev => ({
+      ...prev,
+      callLogs:[entry,...(prev.callLogs||[])],
+      clients:(prev.clients||[]).map(c => c.id===activeLead.id ? updatedClient : c),
+    }));
+
+    logAction?.('Dropped call','Call',activeLead.name);
     setActiveLead(null);
   };
 
@@ -1573,7 +1748,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
         {showAdd      && <ClientFormModal key="add"  onClose={()=>setShowAdd(false)}    onSave={addClient}/>}
         {editTarget   && <ClientFormModal key="edit" client={editTarget} onClose={()=>setEditTarget(null)} onSave={editClient}/>}
         {deleteTarget && <DeleteConfirmModal key="del" client={deleteTarget} onCancel={()=>setDeleteTarget(null)} onConfirm={confirmDelete}/>}
-        {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} user={user}/>}
+        {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} onDrop={dropCall} user={user}/>}
       </AnimatePresence>
 
       {/* ── Conflict toast: shown when someone else claims a client first ── */}

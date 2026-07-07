@@ -1671,7 +1671,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
               <Phone size={15} color="#fff"/>
             </div>
             <h1 style={{ fontSize:22, fontWeight:800, color:C.text, margin:0, letterSpacing:'-.02em' }}>
-              New Calls
+              My Center
             </h1>
             {isSuperAdmin && (
               <Tag label="Super Admin — viewing all agents" color={C.purple} bg={C.purpleBg} border={C.purpleBorder}/>

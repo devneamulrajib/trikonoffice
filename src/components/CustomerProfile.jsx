@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  Phone, Mail, Briefcase, Building2, MapPin,
+  Phone, Mail, Briefcase, MapPin,
   LandPlot, MessageSquare, Wallet, CalendarClock, ChevronDown
 } from "lucide-react";
 
@@ -28,7 +28,35 @@ const FONT_SERIF = `"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif
 const FONT_SANS = `-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif`;
 const FONT_MONO = `"JetBrains Mono","SF Mono",Menlo,Consolas,monospace`;
 
-/* Status → stamp color mapping. Falls back to teal for anything unmapped. */
+/* Container queries so the panel reflows itself based on the
+   space it's actually given, not the viewport — this is what
+   makes it hold up when a parent layout squeezes it narrow. */
+const RESPONSIVE_CSS = `
+  .cp-root { container-type: inline-size; container-name: cp; }
+  .cp-ledger { display: grid; column-gap: 20px; }
+  .cp-header-body { display: flex; align-items: center; gap: 16px; }
+  .cp-header-meta { display: flex; flex-wrap: wrap; row-gap: 4px; column-gap: 16px; margin-top: 10px; }
+  .cp-stamp { position: absolute; top: -6px; right: -4px; }
+
+  @container cp (max-width: 360px) {
+    .cp-header-body { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .cp-stamp { position: static; transform: none; margin-top: 8px; display: inline-block; }
+    .cp-avatar { width: 44px; height: 44px; font-size: 18px; }
+    .cp-name { font-size: 19px; }
+  }
+  @container cp (max-width: 300px) {
+    .cp-ledger[data-cols="2"] { grid-template-columns: 1fr; }
+    .cp-ledger[data-cols="3"] { grid-template-columns: 1fr; }
+  }
+  @container cp (min-width: 301px) {
+    .cp-ledger[data-cols="2"] { grid-template-columns: repeat(2, minmax(120px,1fr)); }
+    .cp-ledger[data-cols="3"] { grid-template-columns: repeat(2, minmax(120px,1fr)); }
+  }
+  @container cp (min-width: 460px) {
+    .cp-ledger[data-cols="3"] { grid-template-columns: repeat(3, minmax(120px,1fr)); }
+  }
+`;
+
 function statusColor(status = "") {
   const s = status.toLowerCase();
   if (/hot|urgent|priority/.test(s)) return { fg: C.red, bg: C.redSoft };
@@ -36,10 +64,6 @@ function statusColor(status = "") {
   return { fg: C.amber, bg: C.amberSoft };
 }
 
-/* ---------------------------------------------------------
-   Numbered index tab — sections in a dossier are a fixed
-   sequence, so the number carries real information here.
---------------------------------------------------------- */
 const SectionTab = ({ n, title, icon: Icon, open, onToggle, collapsible }) => (
   <button
     onClick={collapsible ? onToggle : undefined}
@@ -93,6 +117,7 @@ const SectionTab = ({ n, title, icon: Icon, open, onToggle, collapsible }) => (
         style={{
           transform: open ? "rotate(180deg)" : "rotate(0deg)",
           transition: "transform 0.2s ease",
+          flexShrink: 0,
         }}
       />
     )}
@@ -100,7 +125,7 @@ const SectionTab = ({ n, title, icon: Icon, open, onToggle, collapsible }) => (
 );
 
 const Entry = ({ label, value, mono }) => (
-  <div style={{ padding: "10px 0", borderBottom: `1px dashed ${C.border}` }}>
+  <div style={{ padding: "10px 0", borderBottom: `1px dashed ${C.border}`, minWidth: 0 }}>
     <div
       style={{
         fontFamily: FONT_SANS,
@@ -120,6 +145,9 @@ const Entry = ({ label, value, mono }) => (
         fontSize: 14.5,
         fontWeight: mono ? 500 : 600,
         color: value ? C.ink : C.muted,
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        lineHeight: 1.35,
       }}
     >
       {value || "Not on file"}
@@ -128,13 +156,7 @@ const Entry = ({ label, value, mono }) => (
 );
 
 const Ledger = ({ children, cols = 2 }) => (
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`,
-      columnGap: 20,
-    }}
-  >
+  <div className="cp-ledger" data-cols={cols}>
     {children}
   </div>
 );
@@ -191,7 +213,9 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
   const initial = (client.name || "?")[0].toUpperCase();
 
   return (
-    <div style={{ background: C.paper, padding: 18, borderRadius: 18 }}>
+    <div className="cp-root" style={{ background: C.paper, padding: 18, borderRadius: 18 }}>
+      <style>{RESPONSIVE_CSS}</style>
+
       {/* ---------------- Header : case-file plate ---------------- */}
       <div
         style={{
@@ -203,7 +227,6 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
           overflow: "hidden",
         }}
       >
-        {/* faint ledger rule lines, subject-appropriate texture */}
         <div
           style={{
             position: "absolute",
@@ -213,8 +236,9 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
             pointerEvents: "none",
           }}
         />
-        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="cp-header-body" style={{ position: "relative" }}>
           <div
+            className="cp-avatar"
             style={{
               width: 56,
               height: 56,
@@ -234,6 +258,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2
+              className="cp-name"
               style={{
                 margin: 0,
                 fontFamily: FONT_SERIF,
@@ -241,6 +266,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
                 fontWeight: 700,
                 color: "#fff",
                 letterSpacing: "0.01em",
+                overflowWrap: "anywhere",
               }}
             >
               {client.name}
@@ -258,31 +284,24 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
               {client.type ? ` · ${client.type}` : ""}
             </div>
             <div
-              style={{
-                display: "flex",
-                gap: 16,
-                marginTop: 10,
-                fontFamily: FONT_MONO,
-                fontSize: 12.5,
-                color: "rgba(255,255,255,0.85)",
-              }}
+              className="cp-header-meta"
+              style={{ fontFamily: FONT_MONO, fontSize: 12.5, color: "rgba(255,255,255,0.85)" }}
             >
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Phone size={12} /> {client.phone || "—"}
+              <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <Phone size={12} style={{ flexShrink: 0 }} /> {client.phone || "—"}
               </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Mail size={12} /> {client.email || "—"}
+              <span
+                style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflowWrap: "anywhere" }}
+              >
+                <Mail size={12} style={{ flexShrink: 0 }} /> {client.email || "—"}
               </span>
             </div>
           </div>
 
-          {/* Signature element: rotated ink-stamp status badge */}
           {client.status && (
             <div
+              className="cp-stamp"
               style={{
-                position: "absolute",
-                top: -6,
-                right: -4,
                 transform: "rotate(-8deg)",
                 border: `2px solid ${stamp.fg}`,
                 borderRadius: 8,
@@ -295,6 +314,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
                 color: stamp.fg,
                 background: "rgba(255,255,255,0.06)",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {client.status}
@@ -305,7 +325,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
 
       {/* ---------------- Dossier sections ---------------- */}
       <Section n={1} title="Contact" icon={Phone}>
-        <Ledger>
+        <Ledger cols={2}>
           <Entry label="Full name" value={client.name} />
           <Entry label="Phone" value={client.phone} mono />
           <Entry label="Alternative phone" value={client.altPhone} mono />
@@ -314,7 +334,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
       </Section>
 
       <Section n={2} title="Professional" icon={Briefcase} collapsible defaultOpen={!compact}>
-        <Ledger>
+        <Ledger cols={2}>
           <Entry label="Profession" value={client.profession} />
           <Entry label="Designation" value={client.designation} />
           <Entry label="Company" value={client.company} />
@@ -323,7 +343,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
       </Section>
 
       <Section n={3} title="Deal details" icon={Wallet}>
-        <Ledger>
+        <Ledger cols={2}>
           <Entry label="Purpose" value={client.purpose} />
           <Entry label="Source" value={client.source} />
           <Entry label="Budget range" value={budget} mono />
@@ -335,11 +355,12 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
             paddingTop: 12,
             borderTop: `1px solid ${C.border}`,
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             gap: 8,
           }}
         >
-          <CalendarClock size={15} color={C.teal} />
+          <CalendarClock size={15} color={C.teal} style={{ flexShrink: 0 }} />
           <span style={{ fontFamily: FONT_SANS, fontSize: 12.5, color: C.muted }}>
             Next scheduled call
           </span>
@@ -361,7 +382,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
       </Section>
 
       <Section n={4} title="Property requirements" icon={MapPin} collapsible defaultOpen={!compact}>
-        <Ledger>
+        <Ledger cols={2}>
           <Entry label="Property type" value={client.propertyType} />
           <Entry label="Preferred location" value={client.location} />
         </Ledger>
@@ -391,6 +412,7 @@ export default function CustomerProfile({ client, compact = false, nextScheduled
               fontSize: 14.5,
               lineHeight: 1.7,
               color: C.ink,
+              overflowWrap: "anywhere",
             }}
           >
             {client.notes || "No remarks on file."}

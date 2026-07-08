@@ -6,6 +6,7 @@ import {
   XCircle, History, Send, ShieldCheck, AlertCircle, Users, ArrowRight,
   MessageCircle, Clock, Filter, RotateCcw, User, Briefcase, LandPlot,
 } from 'lucide-react';
+import CustomerProfile from '../../components/CustomerProfile';
 
 // ─── Design tokens (matches NewCall.jsx) ──────────────────────────────────────
 const C = {
@@ -62,6 +63,16 @@ const LEAD_STATUS_CONFIG = {
   'Not Interested': { color: C.slate,  bg: C.slateBg  },
   'Followup':       { color: C.purple, bg: C.purpleBg },
   'Dropped':        { color: C.red,    bg: C.redBg    },
+};
+
+// Call-outcome color mapping — mirrors CALL_OUTCOMES in NewCall.jsx, used
+// only to tint the Call History tags in the detail modal.
+const CALL_OUTCOME_COLORS = {
+  'Answered':      { color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
+  'Busy':          { color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
+  'No Answer':     { color: C.yellow, bg: C.yellowBg, border: C.yellowBorder },
+  'Switched Off':  { color: C.red,    bg: C.redBg,    border: C.redBorder    },
+  'Wrong Number':  { color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
 };
 
 const VIEW_TABS = [
@@ -371,92 +382,45 @@ const ViewTabs = ({ active, counts, onChange }) => (
   </div>
 );
 
-// ─── Shared Client Information panel ─────────────────────────────────────────
-// This is the single "common data" block for the 20 client fields, meant to
-// be reused as-is on New Calls, Follow-up, and Visit pages. It's always
-// sourced live from the client record (looked up by clientId) rather than a
-// point-in-time copy, so edits made anywhere (e.g. during a call) show up
-// everywhere without needing to keep multiple copies in sync.
-const ClientInfoField = ({ label, value }) => (
-  <div>
-    <FieldLabel>{label}</FieldLabel>
-    <ROField value={value} />
-  </div>
-);
-
-const ClientInfoPanel = ({ client }) => {
-  if (!client) {
+// ─── Call History list (right column, alongside Remark History) ──────────────
+// Same shape/behavior as the one in NewCall.jsx's TakeCallModal — this is
+// what makes call history visible from Follow-up too, not just New Call.
+const CallHistoryList = ({ logs }) => {
+  if (!logs.length) {
     return (
-      <Card style={{ minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', gap: 8, textAlign: 'center' }}>
-        <User size={26} style={{ color: C.textMuted, opacity: .5 }} />
-        <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>
-          No client record linked yet.<br />Full details will show here once a client is selected.
-        </div>
-      </Card>
+      <div style={{ fontSize: 12.5, color: C.textMuted, textAlign: 'center', padding: '20px 0' }}>
+        No previous calls logged for this client yet.
+      </div>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Card>
-        <CardHeader icon={Briefcase} title="Basic Info" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ClientInfoField label="Full name" value={client.name} />
-          <ClientInfoField label="Profession" value={client.profession} />
-          <ClientInfoField label="Designation" value={client.designation} />
-          <ClientInfoField label="Company" value={client.company} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader icon={Phone} title="Contact Info" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ClientInfoField label="Phone" value={client.phone} />
-          <ClientInfoField label="Alt. number" value={client.altPhone} />
-          <ClientInfoField label="Email" value={client.email} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader icon={MapPin} title="Deal Info" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ClientInfoField label="Client type" value={client.type} />
-          <ClientInfoField label="Purpose" value={client.purpose} />
-          <ClientInfoField label="Client status" value={client.status} />
-          <ClientInfoField label="Source" value={client.source} />
-          <ClientInfoField label="Property type" value={client.propertyType} />
-          <ClientInfoField label="Preferred location" value={client.location} />
-          <ClientInfoField label="Budget min" value={client.budgetMin} />
-          <ClientInfoField label="Budget max" value={client.budgetMax} />
-          <ClientInfoField label="Address" value={client.address} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader icon={LandPlot} title="Requirements" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ClientInfoField label="Land requirement" value={client.reqLand} />
-          <ClientInfoField label="Flat requirement" value={client.reqFlat} />
-          <ClientInfoField label="Facing preference" value={client.reqFacing} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader icon={MessageCircle} title="Remarks" />
-        <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-          {client.notes?.trim() ? client.notes : <span style={{ color: C.textMuted }}>No remarks on file.</span>}
-        </div>
-      </Card>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto' }}>
+      {logs.map(l => {
+        const o = CALL_OUTCOME_COLORS[l.callOutcome];
+        return (
+          <div key={l.id} style={{ background: C.surfaceRaised, border: `1px solid ${C.border}`,
+            borderRadius: C.r.md, padding: '10px 13px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.accentDark }}>{l.agent || 'Agent'}</span>
+              <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap' }}>{l.date}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+              {l.callOutcome && <Tag label={l.callOutcome} color={o?.color} bg={o?.bg} border={o?.border} />}
+              {l.callStatus && <Tag label={l.callStatus} color={C.purple} bg={C.purpleBg} />}
+            </div>
+            {l.notes && <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{l.notes}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-// ─── Follow-up Detail Modal (Client Info + Info & Edit + Remark History) ────
-// Three-column layout — left is the shared Client Information panel (read
-// only, always live from the client record), middle is the editable
-// follow-up schedule / call context, right is the Remark History timeline
-// with an add-remark box.
-const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkDone, onMarkMissed, onScheduleVisit, onClose }) => {
+// ─── Follow-up Detail Modal (Customer Profile + Info & Edit + Call/Remark history) ─
+// Three-column layout — left is the shared, always-live CustomerProfile
+// (same component New Call uses), middle is the editable follow-up
+// schedule / call context, right is Call History + Remark History.
+const FollowUpDetailModal = ({ mode, fu, clients, callLogs = [], onSaveMeta, onAddNote, onMarkDone, onMarkMissed, onScheduleVisit, onClose }) => {
   const isEdit = Boolean(fu);
 
   const [meta, setMeta] = useState(() => isEdit
@@ -475,8 +439,8 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
 
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
 
-  // The client this follow-up is tied to — used to feed the read-only
-  // Client Information panel on the left. For an existing follow-up this is
+  // The client this follow-up is tied to — feeds the read-only
+  // CustomerProfile panel on the left. For an existing follow-up this is
   // whichever client it was created against (clientId is set automatically
   // when a call is logged from New Calls); for a brand new follow-up it's
   // whatever the agent just picked from the search dropdown below.
@@ -485,6 +449,14 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
     if (!linkedClientId) return null;
     return (clients || []).find(c => c.id === linkedClientId) || null;
   }, [clients, linkedClientId]);
+
+  // This client's prior call-log entries — most recent first.
+  const clientCallHistory = useMemo(() => {
+    if (!linkedClientId) return [];
+    return (callLogs || [])
+      .filter(l => l.clientId === linkedClientId)
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  }, [callLogs, linkedClientId]);
 
   const filtered = useMemo(() => {
     if (!clientSearch.trim()) return (clients || []).slice(0, 6);
@@ -522,7 +494,7 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
       <motion.div initial={{ opacity: 0, y: 20, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 14, scale: .97 }} transition={{ duration: .2, ease: [.16, 1, .3, 1] }}
         onClick={e => e.stopPropagation()}
-        style={{ background: C.surface, borderRadius: C.r.xl, width: '100%', maxWidth: 1180,
+        style={{ background: C.surface, borderRadius: C.r.xl, width: '92vw', maxWidth: 1440,
           maxHeight: '93vh', overflowY: 'auto', boxShadow: C.shadow.xl }}>
 
         {/* Header */}
@@ -577,11 +549,11 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
             </div>
           )}
 
-          <Grid cols="290px 1fr 320px" gap={16} style={{ alignItems: 'flex-start' }}>
-            {/* ── LEFT: Client Information (shared, read-only) ── */}
+          <Grid cols="320px 1fr 340px" gap={16} style={{ alignItems: 'flex-start' }}>
+            {/* ── LEFT: Customer Profile (shared, always live, read-only) ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <DividerLabel>Customer Information</DividerLabel>
-              <ClientInfoPanel client={linkedClient} />
+              <DividerLabel>Customer Profile</DividerLabel>
+              <CustomerProfile client={linkedClient} compact />
             </div>
 
             {/* ── MIDDLE: Info & Edit ── */}
@@ -724,12 +696,20 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
               )}
             </div>
 
-            {/* ── RIGHT: Remark History ── */}
+            {/* ── RIGHT: Call History + Remark History ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <Card style={{ display: 'flex', flexDirection: 'column', minHeight: 420 }}>
-                <CardHeader icon={History} title="Remark History" subtitle={isEdit ? `${notes.length} remark${notes.length === 1 ? '' : 's'}` : 'Available after creating'} />
+              <DividerLabel>Activity &amp; Remarks</DividerLabel>
 
-                <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+              <Card>
+                <CardHeader icon={History} title="Call History"
+                  subtitle={`${clientCallHistory.length} previous call${clientCallHistory.length === 1 ? '' : 's'}`} />
+                <CallHistoryList logs={clientCallHistory} />
+              </Card>
+
+              <Card style={{ display: 'flex', flexDirection: 'column', minHeight: 320 }}>
+                <CardHeader icon={MessageCircle} title="Remark History" subtitle={isEdit ? `${notes.length} remark${notes.length === 1 ? '' : 's'}` : 'Available after creating'} />
+
+                <div style={{ flex: 1, overflowY: 'auto', maxHeight: 260, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
                   {!isEdit ? (
                     <div style={{ fontSize: 13.5, color: C.textMuted, padding: '20px 0', textAlign: 'center' }}>
                       Save this follow-up first, then remarks can be added here.
@@ -871,6 +851,7 @@ const DeleteConfirmModal = ({ fu, onCancel, onConfirm }) => (
 const FollowUp = ({ db, setDb, logAction, user, setView }) => {
   const allFollowUps = db?.followUps || [];
   const allClients   = db?.clients   || [];
+  const callLogs      = db?.callLogs  || [];
 
   const isSuperAdmin = user?.role === 'superadmin';
   const myAgentId    = user?.id;
@@ -1375,6 +1356,7 @@ const FollowUp = ({ db, setDb, logAction, user, setView }) => {
             mode={detailTarget === 'new' ? 'add' : 'edit'}
             fu={liveDetailFu}
             clients={clients}
+            callLogs={callLogs}
             onSaveMeta={handleSaveMeta}
             onAddNote={handleAddNote}
             onMarkDone={handleMarkDone}

@@ -6,6 +6,7 @@ import {
   XCircle, History, Send, ShieldCheck, AlertCircle, Users, ArrowRight,
   MessageCircle, Clock, Home, Building2, Navigation, RotateCcw, User,
 } from 'lucide-react';
+import CustomerProfile from '../../components/CustomerProfile';
 
 // ─── Design tokens (matches NewCall.jsx / FollowUp.jsx) ───────────────────────
 const C = {
@@ -51,6 +52,16 @@ const OUTCOME_CONFIG = {
 };
 const OUTCOME_OPTIONS = Object.keys(OUTCOME_CONFIG);
 
+// Call-outcome color mapping — mirrors CALL_OUTCOMES in NewCall.jsx, used
+// only to tint the Call History tags in the detail modal.
+const CALL_OUTCOME_COLORS = {
+  'Answered':      { color: C.green,  bg: C.greenBg,  border: C.greenBorder  },
+  'Busy':          { color: C.blue,   bg: C.blueBg,   border: C.blueBorder   },
+  'No Answer':     { color: C.yellow, bg: C.yellowBg, border: C.yellowBorder },
+  'Switched Off':  { color: C.red,    bg: C.redBg,    border: C.redBorder    },
+  'Wrong Number':  { color: C.slate,  bg: C.slateBg,  border: C.slateBorder  },
+};
+
 const PROPERTY_TYPES = ['Apartment','Villa','Plot/Land','Commercial','Office Space','Townhouse'];
 
 const VIEW_TABS = [
@@ -90,6 +101,26 @@ const formatNoteTime = (iso) => {
   const datePart = sameDay ? 'Today' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const timePart = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `${datePart} · ${timePart}`;
+};
+
+// Matches a live client record for a visit/in-progress form. Visits don't
+// carry a stored clientId (only clientName / clientPhone), so — same
+// fallback pattern used by NewCall.jsx's followupInfo lookup — we match by
+// phone first, then fall back to name.
+const norm = (s) => (s || '').toString().trim().toLowerCase();
+const matchClient = (clients, { clientPhone, clientName } = {}) => {
+  if (!clients || !clients.length) return null;
+  const phoneKey = norm(clientPhone);
+  if (phoneKey) {
+    const byPhone = clients.find(c => norm(c.phone) === phoneKey);
+    if (byPhone) return byPhone;
+  }
+  const nameKey = norm(clientName);
+  if (nameKey) {
+    const byName = clients.find(c => norm(c.name) === nameKey);
+    if (byName) return byName;
+  }
+  return null;
 };
 
 const hashStr = s => { let h = 0; for (let i = 0; i < (s || '').length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
@@ -359,8 +390,45 @@ const ViewTabs = ({ active, counts, onChange }) => (
   </div>
 );
 
-// ─── Visit Detail Modal (Info & Edit + Remark History) ───────────────────────
-const VisitDetailModal = ({ visit, clients, onSaveMeta, onAddNote, onMarkDone, onMarkMissed, onReschedule, onClose }) => {
+// ─── Call History list (right column, alongside Remark History) ──────────────
+// Same shape/behavior as the one in NewCall.jsx / FollowUp.jsx — makes call
+// history visible from Visit too, matched via the live client record.
+const CallHistoryList = ({ logs }) => {
+  if (!logs.length) {
+    return (
+      <div style={{ fontSize: 12.5, color: C.textMuted, textAlign: 'center', padding: '20px 0' }}>
+        No previous calls logged for this client yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto' }}>
+      {logs.map(l => {
+        const o = CALL_OUTCOME_COLORS[l.callOutcome];
+        return (
+          <div key={l.id} style={{ background: C.surfaceRaised, border: `1px solid ${C.border}`,
+            borderRadius: C.r.md, padding: '10px 13px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.accentDark }}>{l.agent || 'Agent'}</span>
+              <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap' }}>{l.date}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+              {l.callOutcome && <Tag label={l.callOutcome} color={o?.color} bg={o?.bg} border={o?.border} />}
+              {l.callStatus && <Tag label={l.callStatus} color={C.purple} bg={C.purpleBg} />}
+            </div>
+            {l.notes && <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{l.notes}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Visit Detail Modal (Customer Profile + Info & Edit + Call/Remark history) ─
+// Three-column layout — left is the shared, always-live CustomerProfile
+// (same component New Call / Follow-up use), middle is the editable visit
+// schedule / outcome, right is Call History + Remark History.
+const VisitDetailModal = ({ visit, clients, callLogs = [], onSaveMeta, onAddNote, onMarkDone, onMarkMissed, onReschedule, onClose }) => {
   const isEdit = Boolean(visit);
 
   const [meta, setMeta] = useState(() => isEdit
@@ -381,6 +449,22 @@ const VisitDetailModal = ({ visit, clients, onSaveMeta, onAddNote, onMarkDone, o
   const [initialNote, setInitialNote] = useState('');
 
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
+
+  // The client this visit is tied to — feeds the read-only CustomerProfile
+  // panel on the left. Visits don't store a clientId, so we match against
+  // the live client list by phone (preferred) or name.
+  const linkedClient = useMemo(
+    () => matchClient(clients, { clientPhone: meta.clientPhone, clientName: meta.clientName }),
+    [clients, meta.clientPhone, meta.clientName]
+  );
+
+  // This client's prior call-log entries — most recent first.
+  const clientCallHistory = useMemo(() => {
+    if (!linkedClient) return [];
+    return (callLogs || [])
+      .filter(l => l.clientId === linkedClient.id)
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  }, [callLogs, linkedClient]);
 
   const filtered = useMemo(() => {
     if (!clientSearch.trim()) return (clients || []).slice(0, 6);
@@ -416,8 +500,8 @@ const VisitDetailModal = ({ visit, clients, onSaveMeta, onAddNote, onMarkDone, o
       <motion.div initial={{ opacity: 0, y: 20, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 14, scale: .97 }} transition={{ duration: .2, ease: [.16, 1, .3, 1] }}
         onClick={e => e.stopPropagation()}
-        style={{ background: C.surface, borderRadius: C.r.xl, width: '100%', maxWidth: 920,
-          maxHeight: '92vh', overflowY: 'auto', boxShadow: C.shadow.xl }}>
+        style={{ background: C.surface, borderRadius: C.r.xl, width: '92vw', maxWidth: 1440,
+          maxHeight: '93vh', overflowY: 'auto', boxShadow: C.shadow.xl }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px', background: `linear-gradient(135deg,${C.accentDark},${C.accent})`,
@@ -471,8 +555,14 @@ const VisitDetailModal = ({ visit, clients, onSaveMeta, onAddNote, onMarkDone, o
             </div>
           )}
 
-          <Grid cols="1fr 1fr" gap={16}>
-            {/* ── LEFT: Info & Edit ── */}
+          <Grid cols="320px 1fr 340px" gap={16} style={{ alignItems: 'flex-start' }}>
+            {/* ── LEFT: Customer Profile (shared, always live, read-only) ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <DividerLabel>Customer Profile</DividerLabel>
+              <CustomerProfile client={linkedClient} compact />
+            </div>
+
+            {/* ── MIDDLE: Info & Edit ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <Card>
                 <CardHeader icon={Pencil} title="Info & Edit" subtitle={isEdit ? 'Update visit details' : 'Set up this visit'} />
@@ -620,12 +710,20 @@ const VisitDetailModal = ({ visit, clients, onSaveMeta, onAddNote, onMarkDone, o
               )}
             </div>
 
-            {/* ── RIGHT: Remark History ── */}
+            {/* ── RIGHT: Call History + Remark History ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <Card style={{ display: 'flex', flexDirection: 'column', minHeight: 420 }}>
-                <CardHeader icon={History} title="Remark History" subtitle={isEdit ? `${notes.length} remark${notes.length === 1 ? '' : 's'}` : 'Available after creating'} />
+              <DividerLabel>Activity &amp; Remarks</DividerLabel>
 
-                <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+              <Card>
+                <CardHeader icon={History} title="Call History"
+                  subtitle={`${clientCallHistory.length} previous call${clientCallHistory.length === 1 ? '' : 's'}`} />
+                <CallHistoryList logs={clientCallHistory} />
+              </Card>
+
+              <Card style={{ display: 'flex', flexDirection: 'column', minHeight: 320 }}>
+                <CardHeader icon={MessageCircle} title="Remark History" subtitle={isEdit ? `${notes.length} remark${notes.length === 1 ? '' : 's'}` : 'Available after creating'} />
+
+                <div style={{ flex: 1, overflowY: 'auto', maxHeight: 260, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
                   {!isEdit ? (
                     <div style={{ fontSize: 13.5, color: C.textMuted, padding: '20px 0', textAlign: 'center' }}>
                       Save this visit first, then remarks can be added here.
@@ -759,6 +857,7 @@ const DeleteConfirmModal = ({ visit, onCancel, onConfirm }) => (
 const Visit = ({ db, setDb, logAction, user, setView }) => {
   const allVisits  = db?.visits  || [];
   const allClients = db?.clients || [];
+  const callLogs   = db?.callLogs || [];
 
   const isSuperAdmin = user?.role === 'superadmin';
   const myAgentId    = user?.id;
@@ -1222,6 +1321,7 @@ const Visit = ({ db, setDb, logAction, user, setView }) => {
             key="detail"
             visit={liveDetailVisit}
             clients={clients}
+            callLogs={callLogs}
             onSaveMeta={handleSaveMeta}
             onAddNote={handleAddNote}
             onMarkDone={handleMarkDone}

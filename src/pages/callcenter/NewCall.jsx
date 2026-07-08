@@ -7,7 +7,9 @@ import {
   LandPlot, PhoneOff, PhoneMissed, PhoneIncoming, AlertCircle,
   ArrowRight, Zap, TrendingUp, CheckCheck, CalendarClock, CalendarCheck2,
   XCircle, ShieldCheck, Lock, Check, EyeOff, RotateCcw, Hash, Building,
+  History,
 } from 'lucide-react';
+import CustomerProfile from '../../components/CustomerProfile';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -773,8 +775,40 @@ const DeleteConfirmModal = ({ client, onCancel, onConfirm }) => (
   </motion.div>
 );
 
+// ─── Call History list (Activity & Remarks — right column) ──────────────────
+const CallHistoryList = ({ logs }) => {
+  if (!logs.length) {
+    return (
+      <div style={{ fontSize:12.5, color:C.textMuted, textAlign:'center', padding:'24px 0' }}>
+        No previous calls logged for this client yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:340, overflowY:'auto' }}>
+      {logs.map(l => {
+        const o = CALL_OUTCOMES.find(x=>x.value===l.callOutcome);
+        return (
+          <div key={l.id} style={{ background:C.surfaceRaised, border:`1px solid ${C.border}`,
+            borderRadius:C.r.md, padding:'10px 13px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:6 }}>
+              <span style={{ fontSize:12, fontWeight:700, color:C.accentDark }}>{l.agent||'Agent'}</span>
+              <span style={{ fontSize:11, color:C.textMuted, whiteSpace:'nowrap' }}>{l.date}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+              {l.callOutcome && <Tag label={l.callOutcome} color={o?.color} bg={o?.bg} border={o?.border}/>}
+              {l.callStatus  && <Tag label={l.callStatus} color={C.purple} bg={C.purpleBg}/>}
+            </div>
+            {l.notes && <div style={{ fontSize:12.5, color:C.text, lineHeight:1.5 }}>{l.notes}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ─── Take Call Modal ──────────────────────────────────────────────────────────
-const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
+const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user, callLogs = [], liveClient }) => {
   const [fuOn, setFuOn] = useState(Boolean(lead.followupDate));
   const [attempted, setAttempted] = useState(false); // becomes true after a failed "Log call" click
   const [dropConfirm, setDropConfirm] = useState(false); // becomes true after first "Drop call" click, awaiting confirmation
@@ -845,6 +879,18 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
     if (lead.callStatus === 'Followup' && !fuOn) setFuOn(true);
   }, [lead.callStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Client fed to the left CustomerProfile panel: always the live record
+  // from the clients table when we can find it, falling back to the
+  // in-flight `lead` (e.g. brand-new, never-saved client) otherwise. This
+  // is what makes the panel identical across New Call / Follow-up / Visit.
+  const profileClient = liveClient || lead;
+
+  // Call history for the Activity & Remarks panel — this client's prior logs only.
+  const clientCallHistory = useMemo(
+    () => callLogs.filter(l => l.clientId === lead.id).sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')),
+    [callLogs, lead.id]
+  );
+
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{ position:'fixed', inset:0, background:'rgba(2,6,23,.72)', backdropFilter:'blur(6px)',
@@ -853,12 +899,13 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
       <motion.div initial={{opacity:0,y:22,scale:.97}} animate={{opacity:1,y:0,scale:1}}
         exit={{opacity:0,y:14,scale:.97}} transition={{duration:.22,ease:[.16,1,.3,1]}}
         onClick={e=>e.stopPropagation()}
-        style={{ background:C.surface, borderRadius:C.r.xl, width:'100%', maxWidth:820,
+        style={{ background:C.surface, borderRadius:C.r.xl, width:'92vw', maxWidth:1440,
           maxHeight:'93vh', overflowY:'auto', boxShadow:C.shadow.xl }}>
 
-        <div style={{ padding:'20px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
+        {/* ── Sticky header: customer name + quick actions ── */}
+        <div style={{ padding:'18px 24px', background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
           borderRadius:`${C.r.xl}px ${C.r.xl}px 0 0`, position:'sticky', top:0, zIndex:10,
-          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <Avatar name={lead.name} size={42}/>
             <div>
@@ -870,171 +917,144 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ width:30, height:30, borderRadius:C.r.sm, border:'none',
-            background:'rgba(255,255,255,.15)', color:'#fff', cursor:'pointer',
-            display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <X size={15}/>
-          </button>
-        </div>
-
-        <div style={{ padding:'22px 24px', display:'flex', flexDirection:'column', gap:16 }}>
-          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             {telLink && (
-              <a href={telLink} style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'10px 18px',
-                borderRadius:C.r.md, fontSize:13.5, fontWeight:700, textDecoration:'none',
-                background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,
-                color:'#fff', boxShadow:`0 2px 10px ${C.accent}44` }}>
-                <PhoneCall size={15}/> Call {lead.phone}
+              <a href={telLink} style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px',
+                borderRadius:C.r.md, fontSize:13, fontWeight:700, textDecoration:'none',
+                background:'rgba(255,255,255,.22)', color:'#fff' }}>
+                <PhoneCall size={14}/> Call
               </a>
             )}
             {waLink && (
               <a href={waLink} target="_blank" rel="noopener noreferrer"
-                style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'10px 18px',
-                  borderRadius:C.r.md, fontSize:13.5, fontWeight:700, textDecoration:'none',
-                  background:'#F0FDF4', color:'#16A34A', border:'1.5px solid #BBF7D0' }}>
-                <MessageCircle size={15}/> WhatsApp
+                style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px',
+                  borderRadius:C.r.md, fontSize:13, fontWeight:700, textDecoration:'none',
+                  background:'rgba(255,255,255,.22)', color:'#fff' }}>
+                <MessageCircle size={14}/> WhatsApp
               </a>
             )}
+            <button onClick={onClose} style={{ width:32, height:32, borderRadius:C.r.sm, border:'none',
+              background:'rgba(255,255,255,.18)', color:'#fff', cursor:'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <X size={15}/>
+            </button>
           </div>
+        </div>
 
-          <Collapse
-            title="Client details"
-            icon={User}
-            defaultOpen={canEditDetails}
-            summary={[lead.phone,lead.email].filter(Boolean).join(' · ')}
-            action={
-              canEditDetails ? (
-                <Tag
-                  label={isSuperAdmin ? 'Editable — Super Admin' : 'Editable — first call'}
-                  color={C.green} bg={C.greenBg} border={C.greenBorder}
-                />
-              ) : (
-                <Tag label="Locked after first call" color={C.slate} bg={C.slateBg} border={C.slateBorder} />
-              )
-            }
-          >
-            {canEditDetails ? (
-              <>
-                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:16,
-                  padding:'8px 12px', borderRadius:C.r.md, background:C.greenBg, border:`1px solid ${C.greenBorder}` }}>
-                  <ShieldCheck size={14} color={C.green}/>
-                  <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
-                    {isSuperAdmin
-                      ? 'As Super Admin you can always edit this client\'s details.'
-                      : 'This is your first time taking this call — you can correct any client details below.'}
-                  </span>
-                </div>
+        {/* ── 3-column body: Customer Profile | Workflow | Activity & Remarks ── */}
+        <div style={{ padding:'22px 24px' }}>
+          <Grid cols="320px 1fr 340px" gap={16} style={{ alignItems:'flex-start' }}>
 
-                <DividerLabel>Basic Info</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
-                  <div style={{ gridColumn:'1/-1' }}>
-                    <FieldLabel required>Full name</FieldLabel>
-                    <Input value={lead.name||''} onChange={e=>onChange('name',e.target.value)}/>
-                  </div>
-                  <div>
-                    <FieldLabel>Profession</FieldLabel>
-                    <Input value={lead.profession||''} onChange={e=>onChange('profession',e.target.value)}/>
-                  </div>
-                  <div style={{ gridColumn:'2 / span 2' }}>
-                    <FieldLabel>Company</FieldLabel>
-                    <Input value={lead.company||''} onChange={e=>onChange('company',e.target.value)}/>
-                  </div>
-                </Grid>
+            {/* LEFT — Customer Profile (always live, read-only) */}
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <DividerLabel>Customer Profile</DividerLabel>
+              <CustomerProfile client={profileClient} compact/>
+            </div>
 
-                <DividerLabel>Contact Info</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
-                  <div>
-                    <FieldLabel required>Phone</FieldLabel>
-                    <Input value={lead.phone||''} onChange={e=>onChange('phone',e.target.value)} placeholder="01XXXXXXXXX"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Alt. number</FieldLabel>
-                    <Input value={lead.altPhone||''} onChange={e=>onChange('altPhone',e.target.value)} placeholder="01XXXXXXXXX"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Email</FieldLabel>
-                    <Input value={lead.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@example.com"/>
-                  </div>
-                </Grid>
-
-                <DividerLabel>Deal Info</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
-                  <div style={{ gridColumn:'1/-1' }}>
-                    <FieldLabel>Address</FieldLabel>
-                    <Input value={lead.address||''} onChange={e=>onChange('address',e.target.value)}/>
-                  </div>
-                  <div>
-                    <FieldLabel>Budget min</FieldLabel>
-                    <Input type="number" value={lead.budgetMin||''} onChange={e=>onChange('budgetMin',e.target.value)} placeholder="0"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Budget max</FieldLabel>
-                    <Input type="number" value={lead.budgetMax||''} onChange={e=>onChange('budgetMax',e.target.value)} placeholder="0"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Location</FieldLabel>
-                    <Input value={lead.location||''} onChange={e=>onChange('location',e.target.value)} placeholder="Gulshan, Dhaka"/>
-                  </div>
-                </Grid>
-
-                <DividerLabel>Requirements</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10 }}>
-                  <div>
-                    <FieldLabel>Land requirement</FieldLabel>
-                    <Input value={lead.reqLand||''} onChange={e=>onChange('reqLand',e.target.value)} placeholder="e.g. 5 katha land"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Flat requirement</FieldLabel>
-                    <Input value={lead.reqFlat||''} onChange={e=>onChange('reqFlat',e.target.value)} placeholder="e.g. 1500 sft flat"/>
-                  </div>
-                  <div>
-                    <FieldLabel>Facing preference</FieldLabel>
-                    <Input value={lead.reqFacing||''} onChange={e=>onChange('reqFacing',e.target.value)} placeholder="South faced, Corner plot…"/>
-                  </div>
-                </Grid>
-              </>
-            ) : (
-              <>
-                <DividerLabel>Contact & Deal Info</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10, marginBottom:20 }}>
-                  {[
-                    {label:'Phone',      value:lead.phone},
-                    {label:'Alt. number',value:lead.altPhone},
-                    {label:'Email',      value:lead.email},
-                    {label:'Address',    value:lead.address},
-                    {label:'Profession', value:lead.profession},
-                    {label:'Company',    value:lead.company},
-                    {label:'Budget',     value:(lead.budgetMin||lead.budgetMax)?`${lead.budgetMin||'0'} – ${lead.budgetMax||'0'}`:undefined},
-                    {label:'Location',   value:lead.location},
-                  ].map(f=>(
-                    <div key={f.label}>
-                      <FieldLabel>{f.label}</FieldLabel>
-                      <ROField value={f.value}/>
-                    </div>
-                  ))}
-                </Grid>
-
-                <DividerLabel>Requirements</DividerLabel>
-                <Grid cols="repeat(3,1fr)" style={{ marginTop:10 }}>
-                  <div>
-                    <FieldLabel>Land requirement</FieldLabel>
-                    <ROField value={lead.reqLand}/>
-                  </div>
-                  <div>
-                    <FieldLabel>Flat requirement</FieldLabel>
-                    <ROField value={lead.reqFlat}/>
-                  </div>
-                  <div>
-                    <FieldLabel>Facing preference</FieldLabel>
-                    <ROField value={lead.reqFacing}/>
-                  </div>
-                </Grid>
-              </>
-            )}
-          </Collapse>
-
-          <Grid cols="1fr 1fr" gap={16}>
+            {/* MIDDLE — Current workflow (edit details on first call + call outcome) */}
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+              <Collapse
+                title="Edit client details"
+                icon={User}
+                defaultOpen={canEditDetails}
+                summary={!canEditDetails ? 'Locked after first call' : undefined}
+                action={
+                  canEditDetails ? (
+                    <Tag label={isSuperAdmin ? 'Editable — Super Admin' : 'Editable — first call'}
+                      color={C.green} bg={C.greenBg} border={C.greenBorder}/>
+                  ) : (
+                    <Tag label="Locked" color={C.slate} bg={C.slateBg} border={C.slateBorder}/>
+                  )
+                }
+              >
+                {canEditDetails ? (
+                  <>
+                    <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:16,
+                      padding:'8px 12px', borderRadius:C.r.md, background:C.greenBg, border:`1px solid ${C.greenBorder}` }}>
+                      <ShieldCheck size={14} color={C.green}/>
+                      <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
+                        {isSuperAdmin
+                          ? 'As Super Admin you can always edit this client\'s details.'
+                          : 'This is your first time taking this call — you can correct any client details below.'}
+                      </span>
+                    </div>
+
+                    <DividerLabel>Basic Info</DividerLabel>
+                    <Grid cols="1fr 1fr" style={{ marginTop:10, marginBottom:20 }}>
+                      <div style={{ gridColumn:'1/-1' }}>
+                        <FieldLabel required>Full name</FieldLabel>
+                        <Input value={lead.name||''} onChange={e=>onChange('name',e.target.value)}/>
+                      </div>
+                      <div>
+                        <FieldLabel>Profession</FieldLabel>
+                        <Input value={lead.profession||''} onChange={e=>onChange('profession',e.target.value)}/>
+                      </div>
+                      <div>
+                        <FieldLabel>Company</FieldLabel>
+                        <Input value={lead.company||''} onChange={e=>onChange('company',e.target.value)}/>
+                      </div>
+                    </Grid>
+
+                    <DividerLabel>Contact Info</DividerLabel>
+                    <Grid cols="1fr 1fr" style={{ marginTop:10, marginBottom:20 }}>
+                      <div>
+                        <FieldLabel required>Phone</FieldLabel>
+                        <Input value={lead.phone||''} onChange={e=>onChange('phone',e.target.value)} placeholder="01XXXXXXXXX"/>
+                      </div>
+                      <div>
+                        <FieldLabel>Alt. number</FieldLabel>
+                        <Input value={lead.altPhone||''} onChange={e=>onChange('altPhone',e.target.value)} placeholder="01XXXXXXXXX"/>
+                      </div>
+                      <div style={{ gridColumn:'1/-1' }}>
+                        <FieldLabel>Email</FieldLabel>
+                        <Input value={lead.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@example.com"/>
+                      </div>
+                    </Grid>
+
+                    <DividerLabel>Deal Info</DividerLabel>
+                    <Grid cols="1fr 1fr" style={{ marginTop:10, marginBottom:20 }}>
+                      <div style={{ gridColumn:'1/-1' }}>
+                        <FieldLabel>Address</FieldLabel>
+                        <Input value={lead.address||''} onChange={e=>onChange('address',e.target.value)}/>
+                      </div>
+                      <div>
+                        <FieldLabel>Budget min</FieldLabel>
+                        <Input type="number" value={lead.budgetMin||''} onChange={e=>onChange('budgetMin',e.target.value)} placeholder="0"/>
+                      </div>
+                      <div>
+                        <FieldLabel>Budget max</FieldLabel>
+                        <Input type="number" value={lead.budgetMax||''} onChange={e=>onChange('budgetMax',e.target.value)} placeholder="0"/>
+                      </div>
+                      <div style={{ gridColumn:'1/-1' }}>
+                        <FieldLabel>Location</FieldLabel>
+                        <Input value={lead.location||''} onChange={e=>onChange('location',e.target.value)} placeholder="Gulshan, Dhaka"/>
+                      </div>
+                    </Grid>
+
+                    <DividerLabel>Requirements</DividerLabel>
+                    <Grid cols="1fr 1fr" style={{ marginTop:10 }}>
+                      <div>
+                        <FieldLabel>Land requirement</FieldLabel>
+                        <Input value={lead.reqLand||''} onChange={e=>onChange('reqLand',e.target.value)} placeholder="e.g. 5 katha land"/>
+                      </div>
+                      <div>
+                        <FieldLabel>Flat requirement</FieldLabel>
+                        <Input value={lead.reqFlat||''} onChange={e=>onChange('reqFlat',e.target.value)} placeholder="e.g. 1500 sft flat"/>
+                      </div>
+                      <div style={{ gridColumn:'1/-1' }}>
+                        <FieldLabel>Facing preference</FieldLabel>
+                        <Input value={lead.reqFacing||''} onChange={e=>onChange('reqFacing',e.target.value)} placeholder="South faced, Corner plot…"/>
+                      </div>
+                    </Grid>
+                  </>
+                ) : (
+                  <div style={{ fontSize:12.5, color:C.textMuted }}>
+                    Client details are locked after the first call. Full details are visible in the Customer Profile panel on the left.
+                  </div>
+                )}
+              </Collapse>
+
               <Card style={attempted && missing.outcome ? errBox : {}}>
                 <CardHeader icon={PhoneCall} title="Call outcome *" subtitle="What happened when you called"/>
                 <div style={{ marginBottom:14 }}>
@@ -1075,9 +1095,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
                   </div>
                 )}
               </Card>
-            </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card style={attempted && missing.leadStatus ? errBox : {}}>
                 <CardHeader icon={CheckCircle2} title="Lead status *" subtitle="Update after this call"/>
                 <LeadStatusPicker value={lead.callStatus||''} onChange={v=>onChange('callStatus',v)}/>
@@ -1142,17 +1160,25 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user }) => {
                   </div>
                 )}
               </Card>
+            </div>
 
-              <Collapse title="More options" icon={Filter} summary="Visit scheduling — coming soon">
-                <div style={{ fontSize:13, color:C.textMuted }}>Visit scheduling isn't available yet.</div>
-              </Collapse>
+            {/* RIGHT — Activity & Remarks */}
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <DividerLabel>Activity &amp; Remarks</DividerLabel>
+              <Card>
+                <CardHeader icon={History} title="Call History" subtitle={`${clientCallHistory.length} previous call${clientCallHistory.length===1?'':'s'}`}/>
+                <CallHistoryList logs={clientCallHistory}/>
+              </Card>
+              <div style={{ fontSize:11.5, color:C.textMuted, textAlign:'center', lineHeight:1.5 }}>
+                This call's outcome, notes and any scheduled follow-up will appear here once logged.
+              </div>
             </div>
           </Grid>
         </div>
 
         <div style={{ padding:'14px 24px', borderTop:`1px solid ${C.border}`, background:C.surfaceRaised,
           borderRadius:`0 0 ${C.r.xl}px ${C.r.xl}px`, position:'sticky', bottom:0, zIndex:10,
-          display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+          display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
           <div style={{ fontSize:13, color:ready?C.green:C.red, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
             {ready ? (
               <><CheckCircle2 size={14} color={C.green}/> Ready — logging as <strong>&nbsp;{lead.coStatus}</strong></>
@@ -2276,7 +2302,19 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
         {showAdd      && <ClientFormModal key="add"  onClose={()=>setShowAdd(false)}    onSave={addClient}/>}
         {editTarget   && <ClientFormModal key="edit" client={editTarget} onClose={()=>setEditTarget(null)} onSave={editClient}/>}
         {deleteTarget && <DeleteConfirmModal key="del" client={deleteTarget} onCancel={()=>setDeleteTarget(null)} onConfirm={confirmDelete}/>}
-        {activeLead   && <TakeCallModal key="call" lead={activeLead} onChange={updateActive} onClose={()=>setActiveLead(null)} onSubmit={submitCall} onDrop={dropCall} user={user}/>}
+        {activeLead   && (
+          <TakeCallModal
+            key="call"
+            lead={activeLead}
+            onChange={updateActive}
+            onClose={()=>setActiveLead(null)}
+            onSubmit={submitCall}
+            onDrop={dropCall}
+            user={user}
+            callLogs={callLogs}
+            liveClient={allClients.find(c => c.id === activeLead.id)}
+          />
+        )}
       </AnimatePresence>
 
       {/* ── Conflict toast: shown when someone else claims a client first ── */}

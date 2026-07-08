@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, X, Plus, Search, ChevronLeft, ChevronRight, ChevronDown,
   Calendar, CalendarClock, Pencil, Trash2, MapPin, CheckCircle2, CheckCheck,
   XCircle, History, Send, ShieldCheck, AlertCircle, Users, ArrowRight,
-  MessageCircle, Clock, Filter, RotateCcw,
+  MessageCircle, Clock, Filter, RotateCcw, User, Briefcase, LandPlot,
 } from 'lucide-react';
 
 // ─── Design tokens (matches NewCall.jsx) ──────────────────────────────────────
@@ -371,9 +371,91 @@ const ViewTabs = ({ active, counts, onChange }) => (
   </div>
 );
 
-// ─── Follow-up Detail Modal (Info & Edit + Remark History) ───────────────────
-// This is the "pop up" — left column edits the record, right column is the
-// Remark History timeline (like the CRM screenshot) with an add-remark box.
+// ─── Shared Client Information panel ─────────────────────────────────────────
+// This is the single "common data" block for the 20 client fields, meant to
+// be reused as-is on New Calls, Follow-up, and Visit pages. It's always
+// sourced live from the client record (looked up by clientId) rather than a
+// point-in-time copy, so edits made anywhere (e.g. during a call) show up
+// everywhere without needing to keep multiple copies in sync.
+const ClientInfoField = ({ label, value }) => (
+  <div>
+    <FieldLabel>{label}</FieldLabel>
+    <ROField value={value} />
+  </div>
+);
+
+const ClientInfoPanel = ({ client }) => {
+  if (!client) {
+    return (
+      <Card style={{ minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', gap: 8, textAlign: 'center' }}>
+        <User size={26} style={{ color: C.textMuted, opacity: .5 }} />
+        <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>
+          No client record linked yet.<br />Full details will show here once a client is selected.
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <Card>
+        <CardHeader icon={Briefcase} title="Basic Info" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ClientInfoField label="Full name" value={client.name} />
+          <ClientInfoField label="Profession" value={client.profession} />
+          <ClientInfoField label="Designation" value={client.designation} />
+          <ClientInfoField label="Company" value={client.company} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader icon={Phone} title="Contact Info" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ClientInfoField label="Phone" value={client.phone} />
+          <ClientInfoField label="Alt. number" value={client.altPhone} />
+          <ClientInfoField label="Email" value={client.email} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader icon={MapPin} title="Deal Info" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ClientInfoField label="Client type" value={client.type} />
+          <ClientInfoField label="Purpose" value={client.purpose} />
+          <ClientInfoField label="Client status" value={client.status} />
+          <ClientInfoField label="Source" value={client.source} />
+          <ClientInfoField label="Property type" value={client.propertyType} />
+          <ClientInfoField label="Preferred location" value={client.location} />
+          <ClientInfoField label="Budget min" value={client.budgetMin} />
+          <ClientInfoField label="Budget max" value={client.budgetMax} />
+          <ClientInfoField label="Address" value={client.address} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader icon={LandPlot} title="Requirements" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ClientInfoField label="Land requirement" value={client.reqLand} />
+          <ClientInfoField label="Flat requirement" value={client.reqFlat} />
+          <ClientInfoField label="Facing preference" value={client.reqFacing} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader icon={MessageCircle} title="Remarks" />
+        <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+          {client.notes?.trim() ? client.notes : <span style={{ color: C.textMuted }}>No remarks on file.</span>}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// ─── Follow-up Detail Modal (Client Info + Info & Edit + Remark History) ────
+// Three-column layout — left is the shared Client Information panel (read
+// only, always live from the client record), middle is the editable
+// follow-up schedule / call context, right is the Remark History timeline
+// with an add-remark box.
 const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkDone, onMarkMissed, onScheduleVisit, onClose }) => {
   const isEdit = Boolean(fu);
 
@@ -383,7 +465,7 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
         dueDate: fu.dueDate || '', priority: fu.priority || 'medium',
         status: fu.status || 'pending',
       }
-    : { clientName: '', clientPhone: '', dueDate: '', priority: 'medium', status: 'pending' }
+    : { clientId: null, clientName: '', clientPhone: '', dueDate: '', priority: 'medium', status: 'pending' }
   );
 
   const [clientSearch, setClientSearch] = useState(isEdit ? (fu.clientName || '') : '');
@@ -392,6 +474,17 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
   const [initialNote, setInitialNote] = useState('');
 
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
+
+  // The client this follow-up is tied to — used to feed the read-only
+  // Client Information panel on the left. For an existing follow-up this is
+  // whichever client it was created against (clientId is set automatically
+  // when a call is logged from New Calls); for a brand new follow-up it's
+  // whatever the agent just picked from the search dropdown below.
+  const linkedClientId = isEdit ? fu.clientId : meta.clientId;
+  const linkedClient = useMemo(() => {
+    if (!linkedClientId) return null;
+    return (clients || []).find(c => c.id === linkedClientId) || null;
+  }, [clients, linkedClientId]);
 
   const filtered = useMemo(() => {
     if (!clientSearch.trim()) return (clients || []).slice(0, 6);
@@ -429,8 +522,8 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
       <motion.div initial={{ opacity: 0, y: 20, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 14, scale: .97 }} transition={{ duration: .2, ease: [.16, 1, .3, 1] }}
         onClick={e => e.stopPropagation()}
-        style={{ background: C.surface, borderRadius: C.r.xl, width: '100%', maxWidth: 920,
-          maxHeight: '92vh', overflowY: 'auto', boxShadow: C.shadow.xl }}>
+        style={{ background: C.surface, borderRadius: C.r.xl, width: '100%', maxWidth: 1180,
+          maxHeight: '93vh', overflowY: 'auto', boxShadow: C.shadow.xl }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px', background: `linear-gradient(135deg,${C.accentDark},${C.accent})`,
@@ -484,8 +577,14 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
             </div>
           )}
 
-          <Grid cols="1fr 1fr" gap={16}>
-            {/* ── LEFT: Info & Edit ── */}
+          <Grid cols="290px 1fr 320px" gap={16} style={{ alignItems: 'flex-start' }}>
+            {/* ── LEFT: Client Information (shared, read-only) ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <DividerLabel>Customer Information</DividerLabel>
+              <ClientInfoPanel client={linkedClient} />
+            </div>
+
+            {/* ── MIDDLE: Info & Edit ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <Card>
                 <CardHeader icon={Pencil} title="Info & Edit" subtitle={isEdit ? 'Update client & schedule' : 'Set up this follow-up'} />
@@ -508,7 +607,7 @@ const FollowUpDetailModal = ({ mode, fu, clients, onSaveMeta, onAddNote, onMarkD
                       }}>
                         {filtered.map(c => (
                           <div key={c.id} onClick={() => {
-                            setMeta(p => ({ ...p, clientName: c.name, clientPhone: c.phone || '' }));
+                            setMeta(p => ({ ...p, clientId: c.id, clientName: c.name, clientPhone: c.phone || '' }));
                             setClientSearch(c.name);
                             setShowDropdown(false);
                           }} style={{

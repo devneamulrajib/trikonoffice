@@ -4,7 +4,8 @@ import {
   Search, Plus, X, Trash2, Edit3, Phone, Mail, MapPin,
   Building2, DollarSign, ChevronDown, Users as UsersIcon,
   Briefcase, Home, Compass, LandPlot, ShieldCheck, Hash,
-  Flag, CalendarClock, CalendarCheck2, Building,
+  Flag, CalendarClock, CalendarCheck2, Building, User, MessageSquare,
+  AlertCircle,
 } from 'lucide-react';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
@@ -62,6 +63,16 @@ const emptyClient = () => ({
   assignedAt:        null,
 });
 
+// Default accordion open/closed state whenever the modal is (re)opened.
+// Basic Info starts open since Full Name is the only required field.
+const defaultOpenSections = () => ({
+  basic: true,
+  contact: false,
+  deal: false,
+  requirements: false,
+  remarks: false,
+});
+
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const norm = (s) => (s || '').toString().trim().toLowerCase();
 
@@ -103,6 +114,68 @@ const Badge = ({ label, style }) => (
   </span>
 );
 
+// ─── ACCORDION SECTION (Edit/Add Client modal) ─────────────────────────────
+// Same collapse/expand visual language as NewCall.jsx's Collapse component —
+// header row with icon + title + optional summary-when-closed, chevron that
+// rotates, content only rendered while open. `error` puts a red border/label
+// on the header so an invalid required field is easy to spot even collapsed.
+const AccordionSection = ({ title, icon: Icon, summary, open, onToggle, error, children }) => (
+  <div style={{
+    border: `1.5px solid ${error ? '#F43F5E' : 'var(--border)'}`,
+    borderRadius: 12, overflow: 'hidden', marginBottom: 14,
+    transition: 'border-color .15s',
+  }}>
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '12px 16px', background: open ? 'var(--bg)' : 'var(--surface)',
+        border: 'none', cursor: 'pointer', textAlign: 'left', gap: 10,
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+        <span style={{
+          width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+          background: error ? 'rgba(244,63,94,0.12)' : 'rgba(99,102,241,0.12)',
+          color: error ? '#F43F5E' : 'var(--primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={13} />
+        </span>
+        <span style={{
+          fontSize: 12.5, fontWeight: 800, color: 'var(--text)',
+          textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+        }}>
+          {title}
+        </span>
+        {!open && summary && (
+          <span style={{
+            fontSize: 12, color: 'var(--text-muted)', fontWeight: 500,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {summary}
+          </span>
+        )}
+        {error && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#F43F5E', flexShrink: 0 }}>
+            <AlertCircle size={12} /> Required
+          </span>
+        )}
+      </span>
+      <ChevronDown size={14} style={{
+        color: 'var(--text-muted)', flexShrink: 0,
+        transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s',
+      }} />
+    </button>
+    {open && (
+      <div style={{ padding: 16, borderTop: '1px solid var(--border)' }}>
+        {children}
+      </div>
+    )}
+  </div>
+);
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient }) => {
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'super_admin';
@@ -123,6 +196,12 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
   const [agentFilter, setAgentFilter]   = useState('All');
   const [showModal, setShowModal]       = useState(false);
   const [editing, setEditing]           = useState(null);
+
+  // Accordion open/closed state + "tried to save with missing fields" flag
+  // for the Edit/Add Client modal.
+  const [openSections, setOpenSections] = useState(defaultOpenSections());
+  const [attempted, setAttempted]       = useState(false);
+  const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Build agent list for Super Admin filter
   const agentOptions = useMemo(() => {
@@ -199,11 +278,25 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
     junkLead:          statsBase.filter(c => c.status === 'Junk Lead').length,
   }), [statsBase]);
 
-  const openAdd  = () => { setEditing(emptyClient()); setShowModal(true); };
-  const openEdit = (c) => { setEditing({ ...emptyClient(), ...c }); setShowModal(true); };
+  const openAdd  = () => {
+    setEditing(emptyClient());
+    setOpenSections(defaultOpenSections());
+    setAttempted(false);
+    setShowModal(true);
+  };
+  const openEdit = (c) => {
+    setEditing({ ...emptyClient(), ...c });
+    setOpenSections(defaultOpenSections());
+    setAttempted(false);
+    setShowModal(true);
+  };
 
   const handleSave = async () => {
-    if (!editing.name?.trim()) return;
+    if (!editing.name?.trim()) {
+      setAttempted(true);
+      setOpenSections(prev => ({ ...prev, basic: true }));
+      return;
+    }
     const isExisting = allClients.some(c => c.id === editing.id);
     const saved = await saveClient(editing);
     logAction(isExisting ? 'Updated client' : 'Added client', 'client', saved.name);
@@ -235,6 +328,27 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
     { key: 'Booking Completed',  label: 'Booking Completed',  value: stats.bookingCompleted, color: '#22C55E' },
     { key: 'Junk Lead',          label: 'Junk Lead',          value: stats.junkLead,          color: '#F43F5E' },
   ];
+
+  // ── Accordion summaries (shown when a section is collapsed) ─────────────
+  const basicSummary = editing
+    ? [editing.name || 'No name yet', editing.profession].filter(Boolean).join(' · ')
+    : '';
+  const contactSummary = editing
+    ? ([editing.phone, editing.email].filter(Boolean).join(' · ') || 'No contact info yet')
+    : '';
+  const dealSummary = editing
+    ? [editing.type, editing.status, editing.priority].filter(Boolean).join(' · ')
+    : '';
+  const requirementsSummary = editing
+    ? ([editing.reqLand, editing.reqFlat, editing.reqFacing].filter(Boolean).join(' · ') || 'No requirements set')
+    : '';
+  const remarksSummary = editing
+    ? (editing.notes?.trim()
+        ? (editing.notes.trim().length > 48 ? `${editing.notes.trim().slice(0, 48)}…` : editing.notes.trim())
+        : 'No remarks')
+    : '';
+
+  const nameError = attempted && !editing?.name?.trim();
 
   return (
     <motion.div
@@ -535,7 +649,7 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
         )}
       </div>
 
-      {/* ── MODAL ──────────────────────────────────────────────────────── */}
+      {/* ── MODAL (Add / Edit Client — accordion sections) ──────────────── */}
       {showModal && editing && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
@@ -557,104 +671,142 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
               </button>
             </div>
 
-            <SectionLabel>Basic Info</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
-              <Field label="Full Name *" full>
-                <input value={editing.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder="e.g. Mr. Ahmed Karim" />
-              </Field>
-              <Field label="Profession">
-                <input value={editing.profession} onChange={e => set('profession', e.target.value)} style={inputStyle} placeholder="e.g. Doctor, Engineer" />
-              </Field>
-              <Field label="Designation">
-                <input value={editing.designation} onChange={e => set('designation', e.target.value)} style={inputStyle} placeholder="e.g. Senior Manager" />
-              </Field>
-              <Field label="Company / Organization" full>
-                <input value={editing.company} onChange={e => set('company', e.target.value)} style={inputStyle} placeholder="e.g. ABC Ltd." />
-              </Field>
-            </div>
+            <AccordionSection
+              title="Basic Info"
+              icon={User}
+              summary={basicSummary}
+              open={openSections.basic}
+              onToggle={() => toggleSection('basic')}
+              error={nameError}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Full Name *" full>
+                  <input
+                    value={editing.name}
+                    onChange={e => set('name', e.target.value)}
+                    style={nameError ? { ...inputStyle, ...errorInputStyle } : inputStyle}
+                    placeholder="e.g. Mr. Ahmed Karim"
+                  />
+                  {nameError && (
+                    <div style={{ fontSize: 11, color: '#F43F5E', marginTop: 4 }}>Name is required</div>
+                  )}
+                </Field>
+                <Field label="Profession">
+                  <input value={editing.profession} onChange={e => set('profession', e.target.value)} style={inputStyle} placeholder="e.g. Doctor, Engineer" />
+                </Field>
+                <Field label="Designation">
+                  <input value={editing.designation} onChange={e => set('designation', e.target.value)} style={inputStyle} placeholder="e.g. Senior Manager" />
+                </Field>
+                <Field label="Company / Organization" full>
+                  <input value={editing.company} onChange={e => set('company', e.target.value)} style={inputStyle} placeholder="e.g. ABC Ltd." />
+                </Field>
+              </div>
+            </AccordionSection>
 
-            <SectionLabel>Contact Info</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
-              <Field label="Phone">
-                <input value={editing.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
-              </Field>
-              <Field label="Alternative Number">
-                <input value={editing.altPhone} onChange={e => set('altPhone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
-              </Field>
-              <Field label="Email" full>
-                <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
-              </Field>
-            </div>
+            <AccordionSection
+              title="Contact Info"
+              icon={Phone}
+              summary={contactSummary}
+              open={openSections.contact}
+              onToggle={() => toggleSection('contact')}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Phone">
+                  <input value={editing.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
+                </Field>
+                <Field label="Alternative Number">
+                  <input value={editing.altPhone} onChange={e => set('altPhone', e.target.value)} style={inputStyle} placeholder="01XXXXXXXXX" />
+                </Field>
+                <Field label="Email" full>
+                  <input value={editing.email} onChange={e => set('email', e.target.value)} style={inputStyle} placeholder="email@example.com" />
+                </Field>
+              </div>
+            </AccordionSection>
 
-            <SectionLabel>Deal Info</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
-              <Field label="Client Type">
-                <select value={editing.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
-                  {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </Field>
-              <Field label="Purpose">
-                <select value={editing.purpose} onChange={e => set('purpose', e.target.value)} style={inputStyle}>
-                  <option value="">— Not specified —</option>
-                  {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </Field>
-              <Field label="Status">
-                <select value={editing.status} onChange={e => set('status', e.target.value)} style={inputStyle}>
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Priority">
-                <select value={editing.priority} onChange={e => set('priority', e.target.value)} style={inputStyle}>
-                  {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </Field>
-              <Field label="Project Interest" full>
-                <input value={editing.projectInterest} onChange={e => set('projectInterest', e.target.value)} style={inputStyle} placeholder="e.g. Sunset Residency, Block C" />
-              </Field>
-              <Field label="Source">
-                <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
-                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Property Type">
-                <select value={editing.propertyType} onChange={e => set('propertyType', e.target.value)} style={inputStyle}>
-                  {PROPERTY_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </Field>
-              <Field label="Preferred Location">
-                <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
-              </Field>
-              <Field label="Budget Min (BDT)">
-                <input type="number" value={editing.budgetMin} onChange={e => set('budgetMin', e.target.value)} style={inputStyle} placeholder="0" />
-              </Field>
-              <Field label="Budget Max (BDT)">
-                <input type="number" value={editing.budgetMax} onChange={e => set('budgetMax', e.target.value)} style={inputStyle} placeholder="0" />
-              </Field>
-              <Field label="Address" full>
-                <input value={editing.address} onChange={e => set('address', e.target.value)} style={inputStyle} placeholder="Full address" />
-              </Field>
-            </div>
+            <AccordionSection
+              title="Deal Info"
+              icon={Building2}
+              summary={dealSummary}
+              open={openSections.deal}
+              onToggle={() => toggleSection('deal')}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Client Type">
+                  <select value={editing.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
+                    {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </Field>
+                <Field label="Purpose">
+                  <select value={editing.purpose} onChange={e => set('purpose', e.target.value)} style={inputStyle}>
+                    <option value="">— Not specified —</option>
+                    {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select value={editing.status} onChange={e => set('status', e.target.value)} style={inputStyle}>
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Priority">
+                  <select value={editing.priority} onChange={e => set('priority', e.target.value)} style={inputStyle}>
+                    {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+                <Field label="Project Interest" full>
+                  <input value={editing.projectInterest} onChange={e => set('projectInterest', e.target.value)} style={inputStyle} placeholder="e.g. Sunset Residency, Block C" />
+                </Field>
+                <Field label="Source">
+                  <select value={editing.source} onChange={e => set('source', e.target.value)} style={inputStyle}>
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Property Type">
+                  <select value={editing.propertyType} onChange={e => set('propertyType', e.target.value)} style={inputStyle}>
+                    {PROPERTY_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+                <Field label="Preferred Location">
+                  <input value={editing.location} onChange={e => set('location', e.target.value)} style={inputStyle} placeholder="e.g. Gulshan, Dhaka" />
+                </Field>
+                <Field label="Budget Min (BDT)">
+                  <input type="number" value={editing.budgetMin} onChange={e => set('budgetMin', e.target.value)} style={inputStyle} placeholder="0" />
+                </Field>
+                <Field label="Budget Max (BDT)">
+                  <input type="number" value={editing.budgetMax} onChange={e => set('budgetMax', e.target.value)} style={inputStyle} placeholder="0" />
+                </Field>
+                <Field label="Address" full>
+                  <input value={editing.address} onChange={e => set('address', e.target.value)} style={inputStyle} placeholder="Full address" />
+                </Field>
+              </div>
+            </AccordionSection>
 
-            <SectionLabel>Requirements</SectionLabel>
-            <div style={{
-              background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 12, padding: 16, marginBottom: 22,
-              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14
-            }}>
-              <Field label={<><LandPlot size={12} /> Land Requirement</>}>
-                <input value={editing.reqLand} onChange={e => set('reqLand', e.target.value)} style={inputStyle} placeholder="e.g. wants 5 katha land" />
-              </Field>
-              <Field label={<><Home size={12} /> Flat Requirement</>}>
-                <input value={editing.reqFlat} onChange={e => set('reqFlat', e.target.value)} style={inputStyle} placeholder="e.g. wants 1500 sft flat" />
-              </Field>
-              <Field label={<><Compass size={12} /> Facing Preference</>} full>
-                <input value={editing.reqFacing} onChange={e => set('reqFacing', e.target.value)} style={inputStyle} placeholder="e.g. South faced, Corner plot" />
-              </Field>
-            </div>
+            <AccordionSection
+              title="Requirements"
+              icon={LandPlot}
+              summary={requirementsSummary}
+              open={openSections.requirements}
+              onToggle={() => toggleSection('requirements')}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label={<><LandPlot size={12} /> Land Requirement</>}>
+                  <input value={editing.reqLand} onChange={e => set('reqLand', e.target.value)} style={inputStyle} placeholder="e.g. wants 5 katha land" />
+                </Field>
+                <Field label={<><Home size={12} /> Flat Requirement</>}>
+                  <input value={editing.reqFlat} onChange={e => set('reqFlat', e.target.value)} style={inputStyle} placeholder="e.g. wants 1500 sft flat" />
+                </Field>
+                <Field label={<><Compass size={12} /> Facing Preference</>} full>
+                  <input value={editing.reqFacing} onChange={e => set('reqFacing', e.target.value)} style={inputStyle} placeholder="e.g. South faced, Corner plot" />
+                </Field>
+              </div>
+            </AccordionSection>
 
-            <SectionLabel>Remarks</SectionLabel>
-            <div style={{ marginBottom: 8 }}>
+            <AccordionSection
+              title="Remarks"
+              icon={MessageSquare}
+              summary={remarksSummary}
+              open={openSections.remarks}
+              onToggle={() => toggleSection('remarks')}
+            >
               <Field label="Notes / Remarks" full>
                 <textarea
                   value={editing.notes}
@@ -663,9 +815,9 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
                   placeholder="Additional notes about this client..."
                 />
               </Field>
-            </div>
+            </AccordionSection>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
               <button
                 onClick={() => setShowModal(false)}
                 style={{
@@ -678,12 +830,10 @@ const ManageClients = ({ db, setDb, logAction, user, saveClient, deleteClient })
               </button>
               <button
                 onClick={handleSave}
-                disabled={!editing.name?.trim()}
                 style={{
                   padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
                   background: 'var(--primary)', border: 'none', color: '#FFF',
-                  cursor: editing.name?.trim() ? 'pointer' : 'not-allowed',
-                  opacity: editing.name?.trim() ? 1 : 0.5
+                  cursor: 'pointer',
                 }}
               >
                 Save Client
@@ -709,22 +859,17 @@ const inputStyle = {
   color: 'var(--text)', outline: 'none', boxSizing: 'border-box'
 };
 
+const errorInputStyle = {
+  borderColor: '#F43F5E',
+  boxShadow: '0 0 0 3px rgba(244,63,94,0.15)',
+};
+
 const iconBtnStyle = {
   width: 30, height: 30, borderRadius: 8,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: 'none', border: 'none', cursor: 'pointer',
   color: 'var(--text-muted)'
 };
-
-const SectionLabel = ({ children }) => (
-  <div style={{
-    fontSize: 12, fontWeight: 800, color: 'var(--primary)',
-    textTransform: 'uppercase', letterSpacing: '0.05em',
-    marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6
-  }}>
-    {children}
-  </div>
-);
 
 const Field = ({ label, children, full }) => (
   <div style={{ gridColumn: full ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>

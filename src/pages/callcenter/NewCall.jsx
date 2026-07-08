@@ -2089,9 +2089,6 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                     {label:'Requirements',     align:'left'},
                     {label:'Status',           align:'left'},
                     {label:'Agent',            align:'left'},
-                    {label:'Priority',         align:'left'},
-                    {label:'Last Followup',    align:'left'},
-                    {label:'Next Followup',    align:'left'},
                     {label:'Actions',          align:'center'},
                   ].map(h => (
                     <th key={h.label} style={{ textAlign:h.align, padding:'10px 16px',
@@ -2106,7 +2103,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
               <tbody>
                 {pageItems.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
+                    <td colSpan={8} style={{ padding:'72px 20px', textAlign:'center', color:C.textMuted }}>
                       <div style={{ width:52, height:52, borderRadius:'50%', background:C.surfaceRaised,
                         display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
                         <Users size={24} style={{ opacity:.4 }}/>
@@ -2137,10 +2134,6 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                     : null;
 
                   const statusStyle = CLIENT_STATUS_STYLE[item.status] || {};
-                  const pMeta = priorityMeta(item.priority);
-                  const fu = followupInfo[item.id] || {};
-                  const lastF = formatDateShort(fu.last);
-                  const nextF = formatDateShort(fu.next);
                   const projectInterest = item.projectInterest || item.propertyType;
 
                   return (
@@ -2226,26 +2219,6 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
                         {item.assignedAgentId
                           ? <Tag label={item.assignedAgentName || 'Unknown agent'} color={C.blue} bg={C.blueBg} border={C.blueBorder}/>
                           : <span style={{ fontSize:11, color:C.textMuted, fontStyle:'italic' }}>Unclaimed</span>}
-                      </td>
-
-                      {/* Priority */}
-                      <td style={{ padding:'11px 16px', borderBottom:`1px solid ${C.border}99` }}>
-                        <Tag label={pMeta.label} color={pMeta.color} bg={pMeta.bg}/>
-                      </td>
-
-                      {/* Last Followup */}
-                      <td style={{ padding:'11px 16px', fontSize:12, color:C.textMuted,
-                        borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                        {lastF
-                          ? <span style={{ display:'flex', alignItems:'center', gap:4 }}><CalendarCheck2 size={11}/> {lastF}</span>
-                          : '—'}
-                      </td>
-
-                      {/* Next Followup */}
-                      <td style={{ padding:'11px 16px', fontSize:12, borderBottom:`1px solid ${C.border}99`, whiteSpace:'nowrap' }}>
-                        {nextF
-                          ? <span style={{ display:'flex', alignItems:'center', gap:4, color:C.text }}><CalendarClock size={11}/> {nextF}</span>
-                          : <span style={{ color:C.textMuted }}>—</span>}
                       </td>
 
                       {/* Actions */}

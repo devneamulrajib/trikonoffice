@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { Menu } from 'lucide-react';
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 import GlobalStyles from './theme/GlobalStyles';
@@ -205,6 +206,7 @@ const ClearSuite = () => {
   const [syncStatus, setSyncStatus]= useState('loading');
   const [dbLoaded,   setDbLoaded]  = useState(false);
   const [db,         setDbState]   = useState(DEFAULT_DB);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const dbRef        = useRef(db);
   dbRef.current      = db;
@@ -483,6 +485,16 @@ const ClearSuite = () => {
 
   const pendingCount = db.budgetRequests.filter(r => r.status === 'pending').length;
 
+  // Close the mobile drawer automatically if the window is resized up past
+  // the breakpoint (e.g. rotating a tablet, or a resizable desktop window).
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 900) setMobileNavOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // ── Render guards ────────────────────────────────────────────────────────
   if (!isAuth) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
@@ -514,58 +526,82 @@ const ClearSuite = () => {
         user={user}
         onLogout={handleLogout}
         pendingCount={pendingCount}
+        mobileOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
       />
 
-      <main style={{
-        marginLeft: 260,
-        flex:       1,
-        padding:    '44px 52px',
-        minWidth:   0,
-        background: '#F9FAFB',
-        minHeight:  '100vh',
-      }}>
-        <AnimatePresence mode="wait">
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
 
-          {/* ── Forbidden ───────────────────────────────────────────────── */}
-          {isViewForbidden && (
-            <Forbidden key="forbidden" onBack={() => safeSetView(defaultViewFor(user))} />
-          )}
+        {/* ── MOBILE TOP BAR ────────────────────────────────────────────
+            Hidden entirely on desktop via .mobile-topbar { display:none }
+            in GlobalStyles; only shown below the 900px breakpoint. */}
+        <div className="mobile-topbar">
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open menu"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Menu size={22} style={{ color: '#111111' }} />
+          </button>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#111111' }}>
+            Trikon Expense
+          </span>
+        </div>
 
-          {/* ── Core Pages ──────────────────────────────────────────────── */}
-          {!isViewForbidden && view === 'dashboard'      && <Dashboard       key="d"  chartData={chartData} approved={approvedBudget} spent={totalSpent} month={month} db={db} setView={safeSetView} />}
-          {!isViewForbidden && view === 'add_expense'    && <AddExpense       key="ae" db={db} setDb={setDb} selectedMonth={month} logAction={logAction} />}
-          {!isViewForbidden && view === 'salary_advance' && <SalaryAdvance    key="sa" db={db} setDb={setDb} logAction={logAction} />}
-          {!isViewForbidden && view === 'budget_history' && <BudgetHistory    key="bh" db={db} setDb={setDb} logAction={logAction} setView={safeSetView} />}
-          {!isViewForbidden && view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
+        <main className="app-main" style={{
+          marginLeft: 260,
+          flex:       1,
+          padding:    '44px 52px',
+          minWidth:   0,
+          background: '#F9FAFB',
+          minHeight:  '100vh',
+        }}>
+          <AnimatePresence mode="wait">
 
-          {/* ── Permission-gated (formerly superadmin-only) ─────────────── */}
-          {!isViewForbidden && view === 'approvals'      && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
-          {!isViewForbidden && view === 'budget_request' && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
-          {!isViewForbidden && view === 'reports'        && <Reports          key="r"  db={db} selectedMonth={month} />}
-          {!isViewForbidden && view === 'categories'     && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
-          {!isViewForbidden && view === 'activity'       && <ActivityLog      key="al" db={db} />}
+            {/* ── Forbidden ───────────────────────────────────────────────── */}
+            {isViewForbidden && (
+              <Forbidden key="forbidden" onBack={() => safeSetView(defaultViewFor(user))} />
+            )}
 
-          {/* ── Admin / Superadmin only ──────────────────────────────────── */}
-          {!isViewForbidden && view === 'manage_users'   && <ManageUsers      key="mu" />}
+            {/* ── Core Pages ──────────────────────────────────────────────── */}
+            {!isViewForbidden && view === 'dashboard'      && <Dashboard       key="d"  chartData={chartData} approved={approvedBudget} spent={totalSpent} month={month} db={db} setView={safeSetView} />}
+            {!isViewForbidden && view === 'add_expense'    && <AddExpense       key="ae" db={db} setDb={setDb} selectedMonth={month} logAction={logAction} />}
+            {!isViewForbidden && view === 'salary_advance' && <SalaryAdvance    key="sa" db={db} setDb={setDb} logAction={logAction} />}
+            {!isViewForbidden && view === 'budget_history' && <BudgetHistory    key="bh" db={db} setDb={setDb} logAction={logAction} setView={safeSetView} />}
+            {!isViewForbidden && view === 'settings'       && <Settings         key="st" db={db} setDb={setDb} />}
 
-          {/* ── Call Center ─────────────────────────────────────────────── */}
-          {!isViewForbidden && view === 'call_center'     && <CallCenterHub   key="cch" setView={safeSetView} />}
-          {!isViewForbidden && view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_visit'        && <Visit           key="cc7" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}
-          {!isViewForbidden && view === 'cc_requirements' && <Requirements    key="cc6" {...ccProps} />}
+            {/* ── Permission-gated (formerly superadmin-only) ─────────────── */}
+            {!isViewForbidden && view === 'approvals'      && <Approvals        key="ap" db={db} setDb={setDb} logAction={logAction} />}
+            {!isViewForbidden && view === 'budget_request' && <BudgetRequest    key="br" db={db} setDb={setDb} logAction={logAction} user={user} />}
+            {!isViewForbidden && view === 'reports'        && <Reports          key="r"  db={db} selectedMonth={month} />}
+            {!isViewForbidden && view === 'categories'     && <CategoryManager  key="cm" db={db} setDb={setDb} logAction={logAction} />}
+            {!isViewForbidden && view === 'activity'       && <ActivityLog      key="al" db={db} />}
 
-          {/* ── Clients ─────────────────────────────────────────────────── */}
-          {!isViewForbidden && view === 'clients'        && <ClientsHub    key="clh" setView={safeSetView} />}
-          {!isViewForbidden && view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
-          {!isViewForbidden && view === 'clients_add'    && <AddClient     key="cla" {...ccProps} />}
-          {!isViewForbidden && view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
+            {/* ── Admin / Superadmin only ──────────────────────────────────── */}
+            {!isViewForbidden && view === 'manage_users'   && <ManageUsers      key="mu" />}
 
-        </AnimatePresence>
-      </main>
+            {/* ── Call Center ─────────────────────────────────────────────── */}
+            {!isViewForbidden && view === 'call_center'     && <CallCenterHub   key="cch" setView={safeSetView} />}
+            {!isViewForbidden && view === 'cc_new_call'     && <NewCall         key="cc1" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_follow_up'    && <FollowUp        key="cc2" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_visit'        && <Visit           key="cc7" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_transfer'     && <TransferRequest key="cc3" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_comments'     && <Comments        key="cc4" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_call_logs'    && <CallLogs        key="cc5" {...ccProps} />}
+            {!isViewForbidden && view === 'cc_requirements' && <Requirements    key="cc6" {...ccProps} />}
+
+            {/* ── Clients ─────────────────────────────────────────────────── */}
+            {!isViewForbidden && view === 'clients'        && <ClientsHub    key="clh" setView={safeSetView} />}
+            {!isViewForbidden && view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
+            {!isViewForbidden && view === 'clients_add'    && <AddClient     key="cla" {...ccProps} />}
+            {!isViewForbidden && view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
+
+          </AnimatePresence>
+        </main>
+      </div>
 
       <SyncStatus status={syncStatus} />
     </div>

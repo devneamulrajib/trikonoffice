@@ -20,9 +20,11 @@ const GlobalStyles = () => (
       --border:    #E2E8F0;
       --shadow:    0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
       --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --sidebar-w: 260px;
     }
 
-    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 
     .input-field {
       width: 100%; background: var(--surface); border: 1px solid var(--border);
@@ -76,6 +78,86 @@ const GlobalStyles = () => (
     .badge-gray  { background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ══════════════════════════════════════════════════════════════════
+       RESPONSIVE / MOBILE SHELL
+       Breakpoint: 900px. Above it, the sidebar is a static permanent
+       column (as before). Below it, the sidebar becomes an off-canvas
+       drawer toggled by the hamburger button in the mobile top bar.
+       ══════════════════════════════════════════════════════════════════ */
+
+    .app-sidebar { transition: transform 0.25s ease; }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 99;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .mobile-topbar { display: none; }
+
+    @media (max-width: 900px) {
+      .app-sidebar {
+        transform: translateX(-100%);
+        box-shadow: var(--shadow-lg);
+      }
+      .app-sidebar.open {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay {
+        display: block;
+      }
+      .sidebar-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .mobile-close-btn {
+        display: flex !important;
+      }
+
+      .mobile-topbar {
+        display: flex !important;
+        align-items: center;
+        gap: 12px;
+        position: sticky;
+        top: 0;
+        z-index: 90;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 16px;
+      }
+
+      .app-main {
+        margin-left: 0 !important;
+        padding: 20px 16px 32px !important;
+        width: 100% !important;
+      }
+
+      .page-header {
+        flex-wrap: wrap;
+        align-items: flex-start !important;
+        gap: 12px;
+      }
+      .page-header h1 {
+        font-size: 24px !important;
+      }
+      .page-header p {
+        font-size: 14px !important;
+      }
+
+      /* Tables: allow horizontal scroll instead of squeezing columns */
+      .table-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
   `}</style>
 );
 

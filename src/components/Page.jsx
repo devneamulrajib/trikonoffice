@@ -6,7 +6,7 @@ const Page = ({ children, title, subtitle, action }) => (
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -5 }}
   >
-    <div style={{
+    <div className="page-header" style={{
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'flex-end',

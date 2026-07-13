@@ -157,6 +157,20 @@ const GlobalStyles = () => (
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
       }
+
+      /* NewCall.jsx — 5-across metric row (In Queue / Called / Follow-ups /
+         Closed / Dropped) becomes a 2-column grid instead of squishing */
+      .stat-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+      }
+
+      /* NewCall.jsx — Take Call modal's 320px / 1fr / 340px three-column
+         layout (Customer Profile | Workflow | Activity & Remarks) collapses
+         to a single scrollable column instead of overflowing the screen */
+      .take-call-grid {
+        grid-template-columns: 1fr !important;
+      }
     }
   `}</style>
 );

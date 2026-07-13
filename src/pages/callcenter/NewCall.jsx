@@ -498,8 +498,8 @@ const OfferMultiPicker = ({ value, onChange }) => {
   );
 };
 
-const Grid = ({ cols='1fr 1fr', gap=13, children, style }) => (
-  <div style={{ display:'grid', gridTemplateColumns:cols, gap, ...style }}>{children}</div>
+const Grid = ({ cols='1fr 1fr', gap=13, children, style, className }) => (
+  <div className={className} style={{ display:'grid', gridTemplateColumns:cols, gap, ...style }}>{children}</div>
 );
 
 // ─── Dashboard Stat Box ───────────────────────────────────────────────────────
@@ -943,7 +943,7 @@ const TakeCallModal = ({ lead, onChange, onClose, onSubmit, onDrop, user, callLo
 
         {/* ── 3-column body: Customer Profile | Workflow | Activity & Remarks ── */}
         <div style={{ padding:'22px 24px' }}>
-          <Grid cols="320px 1fr 340px" gap={16} style={{ alignItems:'flex-start' }}>
+          <Grid cols="320px 1fr 340px" gap={16} style={{ alignItems:'flex-start' }} className="take-call-grid">
 
             {/* LEFT — Customer Profile (always live, read-only) */}
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -1853,7 +1853,7 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
           or click "In Queue", to go back). Mirrors the clickable stat boxes
           in ManageClients and FollowUp.
       ══════════════════════════════════════════════════════════════════════ */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:10 }}>
+      <div className="stat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:10 }}>
 
         {/* Total in queue — clickable, clears all filters and returns to queue */}
         <StatBox
@@ -2061,11 +2061,12 @@ const NewCall = ({ db, setDb, logAction, user, claimClient, saveClient, deleteCl
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 13px',
-            background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:C.r.md }}>
+            background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:C.r.md,
+            flex:'1 1 220px' }}>
             <Search size={13} style={{ color:C.textMuted, flexShrink:0 }}/>
             <input value={search} onChange={e=>{ setSearch(e.target.value); setPage(1); }}
               placeholder="Search lead ID, name, phone, property…"
-              style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:220 }}/>
+              style={{ background:'none', border:'none', outline:'none', fontSize:13.5, color:C.text, width:'100%', maxWidth:220 }}/>
             {search && (
               <button onClick={()=>{ setSearch(''); setPage(1); }} style={{ background:'none', border:'none',
                 color:C.textMuted, cursor:'pointer', padding:0, display:'flex' }}>

@@ -66,7 +66,7 @@ const NavBtn = ({ item, view, setView, pendingCount, indented = false }) => {
   );
 };
 
-// ─── GROUP BUTTON (clients — navigates to hub page) ───────────────────────────
+// ─── GROUP BUTTON (clients / brokerages — navigates to hub page) ──────────────
 const GroupBtn = ({ item, view, setView }) => {
   const isActive = view === item.id || item.children?.some(c => c.id === view);
   return (
@@ -233,6 +233,9 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount,
     visibleGroupIds.has('call_center') ||
     visibleIds.has('cc_transfer') ||
     visibleIds.has('cc_call_logs');
+  const showBrokerage =
+    visibleGroupIds.has('brokerages') ||
+    visibleIds.has('brokerages_manage');
 
   const canManageUsers = user?.role === 'superadmin' || user?.role === 'admin';
 
@@ -392,6 +395,22 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount,
                 return <GroupBtn key={item.id} item={item} view={view} setView={handleSetView} />;
               }
               // cc_transfer, cc_call_logs, clients_manage → plain nav buttons
+              return (
+                <NavBtn key={item.id} item={item} view={view} setView={handleSetView} pendingCount={pendingCount} />
+              );
+            })
+          }
+
+          {/* ── BROKERAGE ─────────────────────────────────────────── */}
+          {showBrokerage && <SectionLabel>Brokerage</SectionLabel>}
+          {NAVITEMS
+            .filter(i => ['brokerages', 'brokerages_manage'].includes(i.id) && canSee(i, user))
+            .map(item => {
+              if (item.type === 'group') {
+                // Add Brokerage → navigates to hub, same pattern as "Add Client"
+                return <GroupBtn key={item.id} item={item} view={view} setView={handleSetView} />;
+              }
+              // brokerages_manage → plain nav button
               return (
                 <NavBtn key={item.id} item={item} view={view} setView={handleSetView} pendingCount={pendingCount} />
               );

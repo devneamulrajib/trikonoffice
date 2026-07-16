@@ -38,6 +38,11 @@ import ManageClients   from './pages/clients/ManageClients';
 import AddClient       from './pages/clients/AddClient';
 import ImportClients   from './pages/clients/ImportClients';
 
+// ─── BROKERAGE PAGES ──────────────────────────────────────────────────────────
+import BrokerageHub     from './pages/brokerages/BrokerageHub';
+import AddBrokerage     from './pages/brokerages/AddBrokerage';
+import ManageBrokerages from './pages/brokerages/ManageBrokerages';
+
 // ─── DEFAULT DB ───────────────────────────────────────────────────────────────
 const DEFAULT_DB = {
   categories: [
@@ -58,6 +63,7 @@ const DEFAULT_DB = {
   ccComments:       [],
   requirements:     [],
   clients:          [],
+  brokerages:       [],
 };
 
 // ─── VIEW → PERMISSION MAP ────────────────────────────────────────────────────
@@ -86,6 +92,9 @@ const VIEW_PERM_MAP = {
   clients_manage:   'clients_manage',
   clients_add:      'clients_add',
   clients_import:   'clients_import',
+  brokerages:          'brokerages',
+  brokerages_add:      'brokerages_add',
+  brokerages_manage:   'brokerages_manage',
 };
 
 // ─── DATA SYNC CONFIG ─────────────────────────────────────────────────────────
@@ -230,8 +239,8 @@ const ClearSuite = () => {
   // NOTE: `clients` is deliberately stripped out of this payload — clients
   // now live in their own DB table (see /api/clients routes) so that taking
   // a call can be an atomic, race-free operation. Only everything else
-  // (expenses, budgets, call logs, follow-ups, visits, etc.) still goes
-  // through the single JSON blob.
+  // (expenses, budgets, call logs, follow-ups, visits, brokerages, etc.) still
+  // goes through the single JSON blob.
   const syncToServer = useCallback(() => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
@@ -598,6 +607,11 @@ const ClearSuite = () => {
             {!isViewForbidden && view === 'clients_manage' && <ManageClients key="clm" {...ccProps} />}
             {!isViewForbidden && view === 'clients_add'    && <AddClient     key="cla" {...ccProps} />}
             {!isViewForbidden && view === 'clients_import' && <ImportClients key="cli" {...ccProps} />}
+
+            {/* ── Brokerages ──────────────────────────────────────────────── */}
+            {!isViewForbidden && view === 'brokerages'         && <BrokerageHub     key="brh" setView={safeSetView} />}
+            {!isViewForbidden && view === 'brokerages_add'     && <AddBrokerage     key="bra" db={db} setDb={setDb} logAction={logAction} user={user} setView={safeSetView} />}
+            {!isViewForbidden && view === 'brokerages_manage'  && <ManageBrokerages key="brm" db={db} setDb={setDb} logAction={logAction} setView={safeSetView} />}
 
           </AnimatePresence>
         </main>

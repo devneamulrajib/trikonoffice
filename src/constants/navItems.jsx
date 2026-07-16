@@ -4,7 +4,7 @@ import {
   CreditCard, Layers, History, ShieldCheck,
   Settings as SettingsIcon,
   Headphones, Phone, PhoneCall, MapPin, ArrowLeftRight,
-  BookOpen, Users, Table2, Upload, UserPlus
+  BookOpen, Users, Table2, Upload, UserPlus, Building2
 } from 'lucide-react';
 
 const NAVITEMS = [
@@ -48,6 +48,20 @@ const NAVITEMS = [
   },
   { id: 'cc_transfer',  icon: <ArrowLeftRight size={18} />, label: 'Client Transfer Request', roles: 'all', permKey: 'cc_transfer'  },
   { id: 'cc_call_logs', icon: <BookOpen       size={18} />, label: 'Call Logs',               roles: 'all', permKey: 'cc_call_logs' },
+  { type: 'divider', section: 'Brokerage' },
+  {
+    type:    'group',
+    id:      'brokerages',
+    icon:    <Building2 size={18} />,
+    label:   'Brokerages',
+    roles:   'all',
+    permKey: 'brokerages',
+    defaultChild: 'brokerages_add',
+    children: [
+      { id: 'brokerages_add', icon: <Plus size={16} />, label: 'Add Brokerage', roles: 'all', permKey: 'brokerages_add' },
+    ],
+  },
+  { id: 'brokerages_manage', icon: <Table2 size={18} />, label: 'All Brokerages', roles: 'all', permKey: 'brokerages_manage' },
 ];
 
 export default NAVITEMS;

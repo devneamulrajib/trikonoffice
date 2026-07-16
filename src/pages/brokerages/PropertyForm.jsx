@@ -7,15 +7,13 @@ import {
 
 export const CATEGORY_OPTIONS = ['Land / Plot', 'Flat / Apartment'];
 export const BLOCK_OPTIONS     = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P'];
-export const STATUS_OPTIONS    = ['Sold', 'For Sale', 'New Listing', 'Hot Offer', 'Urgent'];
+export const STATUS_OPTIONS    = ['Available', 'Booking', 'Soldout'];
 export const AMENITY_OPTIONS   = ['Lift', 'LPG', 'Parking', 'Generator', '24/7 Security'];
 
 export const STATUS_STYLE = {
-  'Sold':        { bg: '#F1F5F9', color: '#475569' },
-  'For Sale':    { bg: '#D1FAE5', color: '#065F46' },
-  'New Listing': { bg: '#DBEAFE', color: '#1D4ED8' },
-  'Hot Offer':   { bg: '#FFEDD5', color: '#C2410C' },
-  'Urgent':      { bg: '#FEE2E2', color: '#991B1B' },
+  'Available': { bg: '#D1FAE5', color: '#065F46' },
+  'Booking':   { bg: '#FFEDD5', color: '#C2410C' },
+  'Soldout':   { bg: '#F1F5F9', color: '#475569' },
 };
 
 const EMPTY = {
@@ -39,7 +37,7 @@ const EMPTY = {
 
   // Common
   purchasePrice: '',
-  status:        'For Sale',
+  status:        'Available',
   images:        [],
   description:   '',
 

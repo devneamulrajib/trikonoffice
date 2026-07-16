@@ -39,9 +39,9 @@ import AddClient       from './pages/clients/AddClient';
 import ImportClients   from './pages/clients/ImportClients';
 
 // ─── BROKERAGE PAGES ──────────────────────────────────────────────────────────
-import BrokerageHub     from './pages/brokerages/BrokerageHub';
-import AddBrokerage     from './pages/brokerages/AddBrokerage';
-import ManageBrokerages from './pages/brokerages/ManageBrokerages';
+import BrokerageHub     from './pages/brokerages/PropertyHub';
+import AddBrokerage     from './pages/brokerages/AddProperty';
+import ManageBrokerages from './pages/brokerages/ManageProperties';
 
 // ─── DEFAULT DB ───────────────────────────────────────────────────────────────
 const DEFAULT_DB = {

@@ -21,8 +21,8 @@ const PropertyHub = ({ setView }) => (
       <p style={{ color: 'var(--text-lt)', fontSize: 15, marginTop: 4 }}>Internal record of land and flats purchased.</p>
     </div>
     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-      <HubCard icon={<PlusCircle size={22} />} title="Add Property" desc="Record a new land or flat purchase" onClick={() => setView('properties_add')} />
-      <HubCard icon={<Table2 size={22} />} title="All Properties" desc="View, edit, and manage existing records" onClick={() => setView('properties_manage')} />
+      <HubCard icon={<PlusCircle size={22} />} title="Add Property" desc="Record a new land or flat purchase" onClick={() => setView('brokerages_add')} />
+      <HubCard icon={<Table2 size={22} />} title="All Properties" desc="View, edit, and manage existing records" onClick={() => setView('brokerages_manage')} />
     </div>
   </div>
 );

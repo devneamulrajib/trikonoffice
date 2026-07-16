@@ -10,9 +10,9 @@ const AddProperty = ({ db, setDb, logAction, user, setView }) => {
       createdBy:     user?.name || user?.firstName || 'User',
       createdAt:     new Date().toISOString(),
     };
-    setDb((prev) => ({ ...prev, properties: [record, ...(prev.properties || [])] }));
+    setDb((prev) => ({ ...prev, brokerages: [record, ...(prev.brokerages || [])] }));
     logAction(`Added property "${record.location}"`, 'property', record.location);
-    if (!andCreateAnother) setView('properties_manage');
+    if (!andCreateAnother) setView('brokerages_manage');
   };
 
   return (

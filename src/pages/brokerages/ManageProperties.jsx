@@ -8,7 +8,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
   const [catF, setCatF]       = useState('all');
   const [editing, setEditing] = useState(null);
 
-  const properties = db.properties || [];
+  const properties = db.brokerages || [];
 
   const filtered = useMemo(() => {
     return properties.filter((p) => {
@@ -26,7 +26,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
   const handleUpdate = (data) => {
     setDb((prev) => ({
       ...prev,
-      properties: prev.properties.map((p) =>
+      brokerages: prev.brokerages.map((p) =>
         p.id === editing.id ? { ...p, ...data, purchasePrice: Number(data.purchasePrice) || 0 } : p
       ),
     }));
@@ -36,7 +36,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
 
   const handleDelete = (p) => {
     if (!window.confirm(`Delete property "${p.location}"?`)) return;
-    setDb((prev) => ({ ...prev, properties: prev.properties.filter((x) => x.id !== p.id) }));
+    setDb((prev) => ({ ...prev, brokerages: prev.brokerages.filter((x) => x.id !== p.id) }));
     logAction(`Deleted property "${p.location}"`, 'property', p.location);
   };
 
@@ -57,7 +57,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
           <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--zinc-900)' }}>All Properties</h1>
           <p style={{ color: 'var(--text-lt)', fontSize: 15, marginTop: 4 }}>{filtered.length} record{filtered.length !== 1 && 's'}</p>
         </div>
-        <button className="btn-primary" style={{ background: '#F9A825', color: '#111' }} onClick={() => setView('properties_add')}>
+        <button className="btn-primary" style={{ background: '#F9A825', color: '#111' }} onClick={() => setView('brokerages_add')}>
           + Add Property
         </button>
       </div>

@@ -51,17 +51,17 @@ const NAVITEMS = [
   { type: 'divider', section: 'Properties' },
   {
     type:    'group',
-    id:      'properties',
+    id:      'brokerages',
     icon:    <Building2 size={18} />,
     label:   'Properties',
     roles:   'all',
-    permKey: 'properties',
-    defaultChild: 'properties_add',
+    permKey: 'brokerages',
+    defaultChild: 'brokerages_add',
     children: [
-      { id: 'properties_add', icon: <Plus size={16} />, label: 'Add Property', roles: 'all', permKey: 'properties_add' },
+      { id: 'brokerages_add', icon: <Plus size={16} />, label: 'Add Property', roles: 'all', permKey: 'brokerages_add' },
     ],
   },
-  { id: 'properties_manage', icon: <Table2 size={18} />, label: 'All Properties', roles: 'all', permKey: 'properties_manage' },
+  { id: 'brokerages_manage', icon: <Table2 size={18} />, label: 'All Properties', roles: 'all', permKey: 'brokerages_manage' },
 ];
 
 export default NAVITEMS;

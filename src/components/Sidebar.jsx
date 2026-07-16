@@ -66,7 +66,7 @@ const NavBtn = ({ item, view, setView, pendingCount, indented = false }) => {
   );
 };
 
-// ─── GROUP BUTTON (clients / properties — navigates to hub page) ──────────────
+// ─── GROUP BUTTON (clients / brokerages — navigates to hub page) ──────────────
 const GroupBtn = ({ item, view, setView }) => {
   const isActive = view === item.id || item.children?.some(c => c.id === view);
   return (
@@ -234,8 +234,8 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount,
     visibleIds.has('cc_transfer') ||
     visibleIds.has('cc_call_logs');
   const showProperties =
-    visibleGroupIds.has('properties') ||
-    visibleIds.has('properties_manage');
+    visibleGroupIds.has('brokerages') ||
+    visibleIds.has('brokerages_manage');
 
   const canManageUsers = user?.role === 'superadmin' || user?.role === 'admin';
 
@@ -404,13 +404,13 @@ const Sidebar = ({ view, setView, month, setMonth, user, onLogout, pendingCount,
           {/* ── PROPERTIES ────────────────────────────────────────── */}
           {showProperties && <SectionLabel>Properties</SectionLabel>}
           {NAVITEMS
-            .filter(i => ['properties', 'properties_manage'].includes(i.id) && canSee(i, user))
+            .filter(i => ['brokerages', 'brokerages_manage'].includes(i.id) && canSee(i, user))
             .map(item => {
               if (item.type === 'group') {
                 // Add Property → navigates to hub, same pattern as "Add Client"
                 return <GroupBtn key={item.id} item={item} view={view} setView={handleSetView} />;
               }
-              // properties_manage → plain nav button
+              // brokerages_manage → plain nav button
               return (
                 <NavBtn key={item.id} item={item} view={view} setView={handleSetView} pendingCount={pendingCount} />
               );

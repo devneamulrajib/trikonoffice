@@ -1,9 +1,41 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Search, X, Pencil, Trash2, Eye, MapPin, Home, Layers,
-  Phone, Mail, MapPinned, FileText, Download, User, Calendar, ChevronLeft, ChevronRight
+  Search, X, Pencil, Trash2, Eye, MapPin, Home, Layers, Building2,
+  Phone, Mail, MapPinned, FileText, Download, User, Calendar,
+  ChevronLeft, ChevronRight, LandPlot
 } from 'lucide-react';
 import PropertyForm, { CATEGORY_OPTIONS, STATUS_OPTIONS, STATUS_STYLE } from './PropertyForm';
+
+// ─── Action button (View / Edit / Delete) — icon + label, color-coded ──
+const ACTION_STYLE = {
+  view:   { bg: '#EFF6FF', color: '#1D4ED8', hoverBg: '#DBEAFE' },
+  edit:   { bg: '#FFF7ED', color: '#C2410C', hoverBg: '#FFEDD5' },
+  delete: { bg: '#FEF2F2', color: '#DC2626', hoverBg: '#FEE2E2' },
+};
+
+const ActionButton = ({ variant, icon, label, onClick }) => {
+  const [hover, setHover] = useState(false);
+  const s = ACTION_STYLE[variant];
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+        borderRadius: 8, border: 'none', cursor: 'pointer',
+        background: hover ? s.hoverBg : s.bg, color: s.color,
+        fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+        transform: hover ? 'translateY(-1px)' : 'none',
+        boxShadow: hover ? '0 4px 10px rgba(0,0,0,0.08)' : 'none',
+        transition: 'all 0.15s ease',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+};
 
 // ─── Small helper bits ─────────────────────────────────────────────────
 const InfoRow = ({ icon, label, value }) => {
@@ -348,6 +380,25 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
   );
 };
 
+// ─── Stat pill for the header ──────────────────────────────────────────
+const StatPill = ({ icon, label, value, color }) => (
+  <div style={{
+    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+    background: '#fff', border: '1px solid var(--border)', borderRadius: 12,
+  }}>
+    <div style={{
+      width: 34, height: 34, borderRadius: 9, background: color.bg, color: color.fg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      {icon}
+    </div>
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--zinc-900)', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-lt)', fontWeight: 600 }}>{label}</div>
+    </div>
+  </div>
+);
+
 // ─── Main list page ────────────────────────────────────────────────────
 const ManageProperties = ({ db, setDb, logAction, setView }) => {
   const [search, setSearch]   = useState('');
@@ -355,6 +406,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
   const [catF, setCatF]       = useState('all');
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
+  const [hoverRow, setHoverRow] = useState(null);
 
   const properties = db.brokerages || [];
 
@@ -370,6 +422,14 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
       return true;
     });
   }, [properties, search, statusF, catF]);
+
+  const stats = useMemo(() => {
+    const total = properties.length;
+    const available = properties.filter((p) => p.status === 'Available').length;
+    const soldout = properties.filter((p) => p.status === 'Soldout').length;
+    const totalValue = properties.reduce((sum, p) => sum + (Number(p.purchasePrice) || 0), 0);
+    return { total, available, soldout, totalValue };
+  }, [properties]);
 
   const handleUpdate = (data) => {
     setDb((prev) => ({
@@ -400,19 +460,46 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      {/* Header */}
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--zinc-900)' }}>All Properties</h1>
-          <p style={{ color: 'var(--text-lt)', fontSize: 15, marginTop: 4 }}>{filtered.length} record{filtered.length !== 1 && 's'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#B45309',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Building2 size={20} />
+            </div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--zinc-900)' }}>All Properties</h1>
+          </div>
+          <p style={{ color: 'var(--text-lt)', fontSize: 15, marginTop: 6, marginLeft: 50 }}>
+            {filtered.length} record{filtered.length !== 1 && 's'} · internal land &amp; flat purchase register
+          </p>
         </div>
-        <button className="btn-primary" style={{ background: '#F9A825', color: '#111' }} onClick={() => setView('brokerages_add')}>
-          + Add Property
+        <button
+          className="btn-primary"
+          style={{
+            background: '#F9A825', color: '#111', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '11px 20px', fontSize: 14.5, fontWeight: 700, borderRadius: 10,
+            boxShadow: '0 4px 14px rgba(249,168,37,0.35)',
+          }}
+          onClick={() => setView('brokerages_add')}
+        >
+          <LandPlot size={17} /> Add Property
         </button>
+      </div>
+
+      {/* Stat strip */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+        <StatPill icon={<Building2 size={16} />} label="Total Properties" value={stats.total} color={{ bg: '#EFF6FF', fg: '#1D4ED8' }} />
+        <StatPill icon={<Home size={16} />} label="Available" value={stats.available} color={{ bg: '#D1FAE5', fg: '#065F46' }} />
+        <StatPill icon={<Layers size={16} />} label="Sold Out" value={stats.soldout} color={{ bg: '#F1F5F9', fg: '#475569' }} />
+        <StatPill icon={<span style={{ fontWeight: 800, fontSize: 15 }}>৳</span>} label="Portfolio Value (BDT)" value={stats.totalValue.toLocaleString()} color={{ bg: '#FFF7ED', fg: '#C2410C' }} />
       </div>
 
       {/* Filters */}
       <div className="card" style={{ display: 'flex', gap: 12, padding: '14px 18px', marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px' }}>
           <Search size={15} style={{ color: 'var(--text-lt)' }} />
           <input
             value={search} onChange={(e) => setSearch(e.target.value)}
@@ -432,39 +519,78 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
       </div>
 
       {/* Table */}
-      <div className="card table-scroll" style={{ overflow: 'hidden' }}>
-        <table>
+      <div className="card table-scroll" style={{ overflow: 'hidden', borderRadius: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr>
-              {['Location', 'Category', 'Details', 'Owner', 'Purchase Price (BDT)', 'Status', ''].map((h) => (
-                <th key={h} style={{ padding: '12px 16px', textAlign: 'left' }}>{h}</th>
+            <tr style={{ background: 'var(--surface-2)' }}>
+              {['Location', 'Category', 'Details', 'Owner', 'Purchase Price (BDT)', 'Status', 'Actions'].map((h) => (
+                <th key={h} style={{
+                  padding: '13px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700,
+                  color: 'var(--text-lt)', textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id}>
-                <td style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => setViewing(p)}>{p.location}</td>
-                <td style={{ padding: '12px 16px' }}>{p.category}</td>
-                <td style={{ padding: '12px 16px' }}>{details(p)}</td>
-                <td style={{ padding: '12px 16px' }}>{p.ownerName || '—'}</td>
-                <td style={{ padding: '12px 16px' }}>{Number(p.purchasePrice).toLocaleString()}</td>
-                <td style={{ padding: '12px 16px' }}>
+            {filtered.map((p, idx) => (
+              <tr
+                key={p.id}
+                onMouseEnter={() => setHoverRow(p.id)}
+                onMouseLeave={() => setHoverRow(null)}
+                style={{
+                  background: hoverRow === p.id ? 'rgba(249,168,37,0.06)' : (idx % 2 ? 'rgba(148,163,184,0.04)' : 'transparent'),
+                  borderTop: '1px solid var(--border)',
+                  transition: 'background 0.12s ease',
+                }}
+              >
+                <td
+                  style={{ padding: '14px 16px', cursor: 'pointer', fontWeight: 700, color: 'var(--zinc-900)' }}
+                  onClick={() => setViewing(p)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MapPin size={14} style={{ color: 'var(--text-lt)', flexShrink: 0 }} />
+                    {p.location}
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{p.category}</td>
+                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{details(p)}</td>
+                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{p.ownerName || '—'}</td>
+                <td style={{ padding: '14px 16px', fontSize: 13.5, fontWeight: 700, color: 'var(--zinc-900)' }}>
+                  {Number(p.purchasePrice).toLocaleString()}
+                </td>
+                <td style={{ padding: '14px 16px' }}>
                   <span style={{
-                    ...STATUS_STYLE[p.status], padding: '2px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
+                    ...STATUS_STYLE[p.status], padding: '4px 12px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
                   }}>
                     {p.status}
                   </span>
                 </td>
-                <td style={{ padding: '12px 16px', display: 'flex', gap: 6 }}>
-                  <button className="btn-ghost" style={{ padding: 6 }} onClick={() => setViewing(p)}><Eye size={14} /></button>
-                  <button className="btn-ghost" style={{ padding: 6 }} onClick={() => setEditing(p)}><Pencil size={14} /></button>
-                  <button className="btn-danger" style={{ padding: 6 }} onClick={() => handleDelete(p)}><Trash2 size={14} /></button>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <ActionButton variant="view" icon={<Eye size={14} />} label="View" onClick={() => setViewing(p)} />
+                    <ActionButton variant="edit" icon={<Pencil size={14} />} label="Edit" onClick={() => setEditing(p)} />
+                    <ActionButton variant="delete" icon={<Trash2 size={14} />} label="Delete" onClick={() => handleDelete(p)} />
+                  </div>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-lt)' }}>No properties found.</td></tr>
+              <tr>
+                <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%', background: 'var(--surface-2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
+                  }}>
+                    <Building2 size={22} style={{ color: 'var(--text-lt)' }} />
+                  </div>
+                  <div style={{ fontWeight: 700, color: 'var(--zinc-900)', fontSize: 15 }}>No properties found</div>
+                  <div style={{ color: 'var(--text-lt)', fontSize: 13.5, marginTop: 4 }}>
+                    Try adjusting your filters, or add a new property to get started.
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

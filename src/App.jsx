@@ -107,6 +107,42 @@ const CLIENTS_POLL_MS  = 8000;
 // "New Call" instead, both right after login/signup and on session restore.
 const defaultViewFor = (u) => (u?.role === 'call_center' ? 'cc_new_call' : 'dashboard');
 
+// ─── LOCAL CACHE HELPERS ──────────────────────────────────────────────────────
+// The local cache (localStorage) exists purely as a fast-start / offline
+// fallback for the NEXT page load — the server is always the source of
+// truth. Browsers cap localStorage at ~5-10MB per origin, and property
+// records can carry several base64-encoded images, an owner photo, and
+// documents, which blow past that quota fast. So before writing to the
+// cache, we strip out the actual base64 `data` payloads (keeping only
+// filenames/sizes as placeholders) — the real image/document data always
+// lives in React state (fed from the server) and gets re-fetched on next
+// load, it just isn't duplicated into localStorage.
+const stripHeavyFields = (dbToStrip) => {
+  if (!dbToStrip?.brokerages?.length) return dbToStrip;
+  return {
+    ...dbToStrip,
+    brokerages: dbToStrip.brokerages.map((p) => ({
+      ...p,
+      images:     (p.images || []).map(({ data, ...rest }) => rest),
+      documents:  (p.documents || []).map(({ data, ...rest }) => rest),
+      ownerPhoto: p.ownerPhoto ? (({ data, ...rest }) => rest)(p.ownerPhoto) : p.ownerPhoto,
+    })),
+  };
+};
+
+// Never throws — a failed local cache write should never be treated the
+// same as a failed server sync (that used to trigger the same misleading
+// "Offline" banner). Returns true/false so callers can log if they want.
+const safeLocalCacheWrite = (data) => {
+  try {
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(stripHeavyFields(data)));
+    return true;
+  } catch (err) {
+    console.warn('Local cache write skipped (quota exceeded or storage unavailable):', err);
+    return false;
+  }
+};
+
 // ─── ACCESS GUARD ─────────────────────────────────────────────────────────────
 const Forbidden = ({ onBack }) => (
   <div style={{
@@ -264,11 +300,7 @@ const ClearSuite = () => {
   const setDb = useCallback((update) => {
     setDbState(prev => {
       const next = typeof update === 'function' ? update(prev) : update;
-      try {
-        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(next));
-      } catch (err) {
-        console.warn('Local cache write failed:', err);
-      }
+      safeLocalCacheWrite(next);
       return next;
     });
     syncToServer();
@@ -311,7 +343,7 @@ const ClearSuite = () => {
 
         const merged = { ...DEFAULT_DB, ...serverDb };
         setDbState(merged);
-        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(merged));
+        safeLocalCacheWrite(merged);
         setSyncStatus('synced');
       } catch (err) {
         console.error('Failed to load shared data, using local cache:', err);

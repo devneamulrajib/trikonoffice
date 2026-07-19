@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Search, X, Pencil, Trash2, Eye, MapPin, Home, Layers,
-  Wallet, Phone, Mail, MapPinned, FileText, Download, User, Calendar, ChevronLeft, ChevronRight
+  Phone, Mail, MapPinned, FileText, Download, User, Calendar, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import PropertyForm, { CATEGORY_OPTIONS, STATUS_OPTIONS, STATUS_STYLE } from './PropertyForm';
 
@@ -250,7 +250,7 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
               <SectionHeading>Documents &amp; Files</SectionHeading>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {documents.map((f) => (
-                  
+                  <a
                     key={f.id} href={f.data} download={f.name}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',

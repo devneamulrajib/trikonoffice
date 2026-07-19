@@ -21,6 +21,13 @@ import { ImagePlus, Video, Pencil, Loader2 } from 'lucide-react';
   subtitle       string
   primaryAction  { label, icon, onClick } | null
   statsSlot      JSX – rendered as a floating row over the bottom edge
+
+  NOTE: .cover-shell has overflow:hidden (so the media layer clips to the
+  rounded corners). .cover-stats-row is deliberately rendered OUTSIDE that
+  shell, as a sibling right after it, with a negative top margin pulling
+  it up to visually overlap the shell's bottom edge. If it were rendered
+  INSIDE the shell instead, overflow:hidden would clip it — which is
+  exactly the "stat cards cut off at the top" bug this fixes.
 */
 
 const MAX_IMAGE_WIDTH = 1920;
@@ -182,126 +189,130 @@ const CoverSection = ({
   const openPicker = () => inputRef.current?.click();
 
   return (
-    <div ref={shellRef} className="cover-shell">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*,video/*"
-        hidden
-        onChange={(e) => handleFiles(e.target.files)}
-      />
-
-      {/* ── Media layer ── */}
-      {cover?.type === 'image' && (
-        <img
-          className="cover-media-img"
-          src={cover.url}
-          alt={title || 'Cover'}
-          loading="eager"
-          decoding="async"
+    <>
+      <div ref={shellRef} className="cover-shell">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,video/*"
+          hidden
+          onChange={(e) => handleFiles(e.target.files)}
         />
-      )}
 
-      {cover?.type === 'video' && (
-        <>
+        {/* ── Media layer ── */}
+        {cover?.type === 'image' && (
           <img
             className="cover-media-img"
-            src={cover.posterUrl}
+            src={cover.url}
             alt={title || 'Cover'}
             loading="eager"
             decoding="async"
-            style={{ opacity: inView ? 0 : 1, transition: 'opacity 0.3s ease' }}
           />
-          {inView && (
-            <video
-              className="cover-media-video"
-              src={cover.url}
-              poster={cover.posterUrl}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
+        )}
+
+        {cover?.type === 'video' && (
+          <>
+            <img
+              className="cover-media-img"
+              src={cover.posterUrl}
+              alt={title || 'Cover'}
+              loading="eager"
+              decoding="async"
+              style={{ opacity: inView ? 0 : 1, transition: 'opacity 0.3s ease' }}
             />
-          )}
-        </>
-      )}
+            {inView && (
+              <video
+                className="cover-media-video"
+                src={cover.url}
+                poster={cover.posterUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+            )}
+          </>
+        )}
 
-      {!cover && (
-        <div
-          className={`cover-upload-zone${dragOver ? ' drag-over' : ''}`}
-          role="button"
-          tabIndex={0}
-          onClick={openPicker}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPicker()}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-        >
-          {busy ? (
-            <Loader2 size={26} className="spin" style={{ animation: 'spin 0.9s linear infinite' }} />
-          ) : (
-            <>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ImagePlus size={22} />
-                <Video size={22} />
-              </div>
-              <div style={{ fontSize: 14.5, fontWeight: 700 }}>Add a cover photo or video</div>
-              <div style={{ fontSize: 12.5, opacity: 0.75 }}>
-                Drag & drop, or click to browse — optimized automatically
-              </div>
-            </>
-          )}
-          {error && (
-            <div style={{ fontSize: 12, color: '#FCA5A5', maxWidth: 320 }}>{error}</div>
-          )}
-        </div>
-      )}
-
-      {/* ── Scrim + content overlay (only once media exists) ── */}
-      {cover && (
-        <>
-          <div className="cover-scrim" />
-          <div className="cover-content">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                {eyebrow && <div className="cover-eyebrow">{eyebrow}</div>}
-                <h1 className="cover-title">{title}</h1>
-                {subtitle && <p className="cover-subtitle">{subtitle}</p>}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button type="button" className="cover-glass-btn" onClick={openPicker} disabled={busy}>
-                  {busy ? <Loader2 size={14} style={{ animation: 'spin 0.9s linear infinite' }} /> : <Pencil size={14} />}
-                  {busy ? 'Optimizing…' : 'Change cover'}
-                </button>
-                {primaryAction && (
-                  <button type="button" className="btn-primary" onClick={primaryAction.onClick}>
-                    {primaryAction.icon}
-                    {primaryAction.label}
-                  </button>
-                )}
-              </div>
-            </div>
-            <div style={{ height: 46 }} />
+        {!cover && (
+          <div
+            className={`cover-upload-zone${dragOver ? ' drag-over' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={openPicker}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPicker()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+          >
+            {busy ? (
+              <Loader2 size={26} className="spin" style={{ animation: 'spin 0.9s linear infinite' }} />
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <ImagePlus size={22} />
+                  <Video size={22} />
+                </div>
+                <div style={{ fontSize: 14.5, fontWeight: 700 }}>Add a cover photo or video</div>
+                <div style={{ fontSize: 12.5, opacity: 0.75 }}>
+                  Drag & drop, or click to browse — optimized automatically
+                </div>
+              </>
+            )}
+            {error && (
+              <div style={{ fontSize: 12, color: '#FCA5A5', maxWidth: 320 }}>{error}</div>
+            )}
           </div>
-        </>
-      )}
+        )}
 
-      {error && cover && (
-        <div style={{
-          position: 'absolute', left: 20, bottom: 60, zIndex: 6,
-          fontSize: 12, color: '#fff', background: 'rgba(220,38,38,0.9)',
-          padding: '6px 12px', borderRadius: 8,
-        }}>
-          {error}
-        </div>
-      )}
+        {/* ── Scrim + content overlay (only once media exists) ── */}
+        {cover && (
+          <>
+            <div className="cover-scrim" />
+            <div className="cover-content">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  {eyebrow && <div className="cover-eyebrow">{eyebrow}</div>}
+                  <h1 className="cover-title">{title}</h1>
+                  {subtitle && <p className="cover-subtitle">{subtitle}</p>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button type="button" className="cover-glass-btn" onClick={openPicker} disabled={busy}>
+                    {busy ? <Loader2 size={14} style={{ animation: 'spin 0.9s linear infinite' }} /> : <Pencil size={14} />}
+                    {busy ? 'Optimizing…' : 'Change cover'}
+                  </button>
+                  {primaryAction && (
+                    <button type="button" className="btn-primary" onClick={primaryAction.onClick}>
+                      {primaryAction.icon}
+                      {primaryAction.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ height: 46 }} />
+            </div>
+          </>
+        )}
 
-      {/* Floating stats row, anchored to the bottom edge of the cover */}
+        {error && cover && (
+          <div style={{
+            position: 'absolute', left: 20, bottom: 60, zIndex: 6,
+            fontSize: 12, color: '#fff', background: 'rgba(220,38,38,0.9)',
+            padding: '6px 12px', borderRadius: 8,
+          }}>
+            {error}
+          </div>
+        )}
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+
+      {/* Floating stats row — rendered OUTSIDE .cover-shell (which has
+          overflow:hidden) so the negative top margin can pull it up to
+          overlap the shell's bottom edge without being clipped. */}
       {statsSlot && <div className="cover-stats-row">{statsSlot}</div>}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </>
   );
 };
 

@@ -12,7 +12,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+// Raised from 10mb -> 50mb: property records can carry several base64-encoded
+// images, an owner photo, and documents (deed/NID/agreement) all inside the
+// single app_data JSON blob. Base64 inflates size ~33%, and every save resends
+// the ENTIRE db (all properties' files included), so 10mb was getting hit
+// quickly and causing 413s -> the "Offline — changes saved locally only" banner.
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Roles that are allowed to be set via the API. 'superadmin' is intentionally

@@ -1,0 +1,396 @@
+/* ==========================================================================
+   TRIKON PROPERTY REGISTER — DESIGN SYSTEM
+   Display face: Plus Jakarta Sans (headings, stat values, brand moments)
+   Body/data face: Inter (paragraphs, tables, form fields — tabular numerals)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* ---------- Brand ---------- */
+  --primary:        #F9A825;
+  --primary-dk:     #B45309;
+  --primary-dkr:    #92400E;
+  --primary-soft:   #FEF3C7;
+  --primary-glow:   rgba(249, 168, 37, 0.32);
+
+  /* ---------- Ink / neutrals ---------- */
+  --ink:            #0F172A;
+  --zinc-900:       #0F172A;
+  --text:           #334155;
+  --text-lt:        #64748B;
+  --text-faint:     #94A3B8;
+
+  /* ---------- Surfaces ---------- */
+  --surface:        #FFFFFF;
+  --surface-2:      #F8FAFC;
+  --surface-3:      #F1F5F9;
+  --border:         #E7EBF1;
+  --border-soft:    #EFF2F6;
+
+  /* ---------- Status ---------- */
+  --available-bg:   #D1FAE5;  --available-fg: #065F46;
+  --booking-bg:     #FFEDD5;  --booking-fg:   #C2410C;
+  --soldout-bg:     #F1F5F9;  --soldout-fg:   #475569;
+  --danger:         #DC2626;  --danger-bg:    #FEF2F2;  --danger-hover: #FEE2E2;
+  --info:           #1D4ED8;  --info-bg:      #EFF6FF;  --info-hover:   #DBEAFE;
+  --edit:           #C2410C;  --edit-bg:      #FFF7ED;  --edit-hover:   #FFEDD5;
+
+  /* ---------- Elevation ---------- */
+  --shadow-xs:   0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm:   0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md:   0 10px 28px rgba(15, 23, 42, 0.08);
+  --shadow-lg:   0 24px 56px rgba(15, 23, 42, 0.16);
+  --shadow-glow: 0 12px 28px var(--primary-glow);
+
+  /* ---------- Radius ---------- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* ---------- Type ---------- */
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+::selection { background: var(--primary-soft); color: var(--primary-dkr); }
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Slim, quiet scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; border: 2px solid var(--surface-2); }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ==========================================================================
+   Layout primitives
+   ========================================================================== */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: #DCE2EA;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1C1300;
+  background: linear-gradient(135deg, #FFC94D 0%, var(--primary) 55%, #F59E0B 100%);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  box-shadow: var(--shadow-glow);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 34px var(--primary-glow); filter: brightness(1.03); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 18px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-ghost:hover { background: var(--surface-3); border-color: #D6DCE5; }
+
+/* ==========================================================================
+   Form fields
+   ========================================================================== */
+
+.input-field {
+  width: 100%;
+  padding: 11px 14px;
+  font-family: var(--font-body);
+  font-size: 13.75px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input-field:hover { border-color: #D6DCE5; }
+.input-field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+.input-field::placeholder { color: var(--text-faint); }
+
+/* ==========================================================================
+   Cover / hero banner (image + video, with upload affordance)
+   ========================================================================== */
+
+.cover-shell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 21 / 8;
+  min-height: 220px;
+  max-height: 380px;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background: linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #1C1300 130%);
+  box-shadow: var(--shadow-lg);
+  isolation: isolate;
+}
+
+@media (max-width: 640px) {
+  .cover-shell { aspect-ratio: 4 / 3; max-height: 320px; border-radius: var(--r-lg); }
+}
+
+.cover-media-img,
+.cover-media-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.cover-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(15,23,42,0.15) 0%, rgba(15,23,42,0.05) 30%, rgba(15,23,42,0.55) 78%, rgba(15,23,42,0.82) 100%),
+    linear-gradient(90deg, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0) 45%);
+}
+
+.cover-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 26px 28px 0;
+  color: #fff;
+}
+
+.cover-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #FDE8B8;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px);
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+}
+
+.cover-title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.2vw, 34px);
+  font-weight: 800;
+  text-shadow: 0 2px 18px rgba(0,0,0,0.35);
+  margin-top: 10px;
+}
+
+.cover-subtitle {
+  font-size: 14.5px;
+  color: rgba(255,255,255,0.85);
+  margin-top: 6px;
+  max-width: 520px;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.3);
+}
+
+.cover-glass-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.28);
+  backdrop-filter: blur(10px);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+.cover-glass-btn:hover { background: rgba(255,255,255,0.24); transform: translateY(-1px); }
+
+.cover-upload-zone {
+  position: absolute;
+  inset: 14px;
+  border: 1.5px dashed rgba(255,255,255,0.35);
+  border-radius: calc(var(--r-xl) - 10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  text-align: center;
+  padding: 20px;
+}
+.cover-upload-zone:hover,
+.cover-upload-zone.drag-over {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--primary);
+}
+
+.cover-stats-row {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: -46px 20px 0;
+}
+
+@media (max-width: 640px) {
+  .cover-stats-row { margin: -34px 12px 0; gap: 10px; }
+}
+
+/* ==========================================================================
+   Stat cards (glass, floating over the cover edge)
+   ========================================================================== */
+
+.stat-card {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+
+.stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-lt);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   Skeleton shimmer (for lazily-loaded gallery imagery)
+   ========================================================================== */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.img-skeleton {
+  background: linear-gradient(90deg, var(--surface-3) 25%, #E9EDF2 37%, var(--surface-3) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* ==========================================================================
+   Table
+   ========================================================================== */
+
+.data-table thead th {
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
+}
+
+.data-table tbody tr {
+  transition: background 0.15s ease;
+}

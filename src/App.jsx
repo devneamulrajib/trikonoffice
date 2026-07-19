@@ -111,12 +111,12 @@ const defaultViewFor = (u) => (u?.role === 'call_center' ? 'cc_new_call' : 'dash
 // The local cache (localStorage) exists purely as a fast-start / offline
 // fallback for the NEXT page load — the server is always the source of
 // truth. Browsers cap localStorage at ~5-10MB per origin, and property
-// records can carry several base64-encoded images, an owner photo, and
-// documents, which blow past that quota fast. So before writing to the
-// cache, we strip out the actual base64 `data` payloads (keeping only
-// filenames/sizes as placeholders) — the real image/document data always
-// lives in React state (fed from the server) and gets re-fetched on next
-// load, it just isn't duplicated into localStorage.
+// records can carry several base64-encoded images, an owner photo, a cover
+// image, and documents, which blow past that quota fast. So before writing
+// to the cache, we strip out the actual base64 `data` payloads (keeping only
+// filenames/sizes as placeholders) — the real image/document/cover data
+// always lives in React state (fed from the server) and gets re-fetched on
+// next load, it just isn't duplicated into localStorage.
 const stripHeavyFields = (dbToStrip) => {
   if (!dbToStrip?.brokerages?.length) return dbToStrip;
   return {
@@ -126,6 +126,13 @@ const stripHeavyFields = (dbToStrip) => {
       images:     (p.images || []).map(({ data, ...rest }) => rest),
       documents:  (p.documents || []).map(({ data, ...rest }) => rest),
       ownerPhoto: p.ownerPhoto ? (({ data, ...rest }) => rest)(p.ownerPhoto) : p.ownerPhoto,
+      // `cover` is a single base64 data-URL string (set by CoverSection.jsx),
+      // not an {data, ...rest} object like images/documents/ownerPhoto — so
+      // it can't be destructured the same way. We just drop it from the
+      // cached copy entirely; a placeholder flag lets the UI know a cover
+      // exists even before the real string comes back from the server.
+      cover:      p.cover ? undefined : p.cover,
+      hasCover:   !!p.cover,
     })),
   };
 };

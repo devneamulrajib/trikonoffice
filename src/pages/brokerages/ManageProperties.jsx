@@ -2,15 +2,16 @@ import React, { useState, useMemo } from 'react';
 import {
   Search, X, Pencil, Trash2, Eye, MapPin, Home, Layers, Building2,
   Phone, Mail, MapPinned, FileText, Download, User, Calendar,
-  ChevronLeft, ChevronRight, LandPlot
+  ChevronLeft, ChevronRight, LandPlot, Wallet
 } from 'lucide-react';
 import PropertyForm, { CATEGORY_OPTIONS, STATUS_OPTIONS, STATUS_STYLE } from './PropertyForm';
+import CoverSection from './CoverSection';
 
 // ─── Action button (View / Edit / Delete) — icon + label, color-coded ──
 const ACTION_STYLE = {
-  view:   { bg: '#EFF6FF', color: '#1D4ED8', hoverBg: '#DBEAFE' },
-  edit:   { bg: '#FFF7ED', color: '#C2410C', hoverBg: '#FFEDD5' },
-  delete: { bg: '#FEF2F2', color: '#DC2626', hoverBg: '#FEE2E2' },
+  view:   { bg: 'var(--info-bg)',   color: 'var(--info)',   hoverBg: 'var(--info-hover)' },
+  edit:   { bg: 'var(--edit-bg)',   color: 'var(--edit)',   hoverBg: 'var(--edit-hover)' },
+  delete: { bg: 'var(--danger-bg)', color: 'var(--danger)', hoverBg: 'var(--danger-hover)' },
 };
 
 const ActionButton = ({ variant, icon, label, onClick }) => {
@@ -22,12 +23,12 @@ const ActionButton = ({ variant, icon, label, onClick }) => {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
-        borderRadius: 8, border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+        borderRadius: 9, border: 'none', cursor: 'pointer',
         background: hover ? s.hoverBg : s.bg, color: s.color,
         fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
         transform: hover ? 'translateY(-1px)' : 'none',
-        boxShadow: hover ? '0 4px 10px rgba(0,0,0,0.08)' : 'none',
+        boxShadow: hover ? '0 6px 14px rgba(15,23,42,0.10)' : 'none',
         transition: 'all 0.15s ease',
       }}
     >
@@ -100,29 +101,33 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 200,
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(3px)', zIndex: 200,
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px',
     }} onClick={onClose}>
       <div
         className="card"
-        style={{ padding: 0, maxWidth: 720, width: '100%', overflow: 'hidden' }}
+        style={{ padding: 0, maxWidth: 760, width: '100%', overflow: 'hidden', borderRadius: 22, boxShadow: 'var(--shadow-lg)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header / image banner */}
         <div style={{ position: 'relative' }}>
           {images.length > 0 ? (
             <div
-              style={{ height: 220, width: '100%', cursor: 'pointer', overflow: 'hidden', background: 'var(--surface-2)' }}
+              style={{ height: 260, width: '100%', cursor: 'pointer', overflow: 'hidden', background: 'var(--surface-2)' }}
               onClick={() => showLightbox(0)}
             >
               <img
                 src={images[0].data} alt={images[0].name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(180deg, rgba(15,23,42,0.05) 55%, rgba(15,23,42,0.55) 100%)',
+              }} />
             </div>
           ) : (
             <div style={{
-              height: 140, width: '100%', background: 'var(--surface-2)',
+              height: 150, width: '100%', background: 'var(--surface-2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-lt)',
             }}>
               <Home size={32} />
@@ -132,47 +137,51 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
           <button
             onClick={onClose}
             style={{
-              position: 'absolute', top: 14, right: 14, width: 32, height: 32, borderRadius: '50%',
+              position: 'absolute', top: 16, right: 16, width: 34, height: 34, borderRadius: '50%',
               background: 'rgba(15,23,42,0.55)', color: '#fff', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)',
+              transition: 'background 0.15s ease',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(15,23,42,0.75)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(15,23,42,0.55)')}
           >
             <X size={16} />
           </button>
 
           {images.length > 1 && (
             <div style={{
-              position: 'absolute', bottom: 12, right: 14, background: 'rgba(15,23,42,0.6)',
-              color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
+              position: 'absolute', bottom: 14, right: 16, background: 'rgba(15,23,42,0.65)',
+              color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '4px 12px', borderRadius: 99,
+              backdropFilter: 'blur(4px)',
             }}>
               +{images.length - 1} more photo{images.length - 1 !== 1 && 's'}
             </div>
           )}
         </div>
 
-        <div style={{ padding: '24px 28px 28px', maxHeight: '70vh', overflowY: 'auto' }}>
+        <div style={{ padding: '26px 30px 30px', maxHeight: '68vh', overflowY: 'auto' }}>
           {/* Title row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{
-                  fontSize: 11.5, fontWeight: 700, color: 'var(--primary-dk)', background: 'var(--surface-2)',
-                  padding: '3px 10px', borderRadius: 99,
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--primary-dk)', background: 'var(--primary-soft)',
+                  padding: '4px 12px', borderRadius: 99,
                 }}>
                   {p.category}
                 </span>
                 <span style={{
-                  ...STATUS_STYLE[p.status], padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
+                  ...STATUS_STYLE[p.status], padding: '4px 12px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
                 }}>
                   {p.status}
                 </span>
               </div>
-              <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--zinc-900)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <MapPin size={18} style={{ color: 'var(--text-lt)', flexShrink: 0 }} />
+              <h2 style={{ fontSize: 23, fontWeight: 800, color: 'var(--zinc-900)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MapPin size={19} style={{ color: 'var(--primary-dk)', flexShrink: 0 }} />
                 {p.location}
               </h2>
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#065F46', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 21, fontWeight: 800, color: 'var(--available-fg)', whiteSpace: 'nowrap' }}>
               ৳{Number(p.purchasePrice).toLocaleString()}
             </div>
           </div>
@@ -183,11 +192,15 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
               {images.map((img, i) => (
                 <img
                   key={img.id} src={img.data} alt={img.name}
+                  loading="lazy" decoding="async"
                   onClick={() => showLightbox(i)}
                   style={{
-                    width: 60, height: 60, objectFit: 'cover', borderRadius: 8,
+                    width: 64, height: 64, objectFit: 'cover', borderRadius: 9,
                     border: '1px solid var(--border)', cursor: 'pointer',
+                    transition: 'transform 0.15s ease', boxShadow: 'var(--shadow-xs)',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 />
               ))}
             </div>
@@ -219,8 +232,8 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {p.amenities.map((a) => (
                 <span key={a} style={{
-                  fontSize: 12, fontWeight: 600, color: 'var(--primary-dk)', background: 'var(--surface-2)',
-                  padding: '4px 10px', borderRadius: 99,
+                  fontSize: 12, fontWeight: 600, color: 'var(--primary-dk)', background: 'var(--primary-soft)',
+                  padding: '5px 12px', borderRadius: 99,
                 }}>
                   {a}
                 </span>
@@ -233,7 +246,7 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
             <>
               <SectionHeading>Description</SectionHeading>
               <div
-                style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}
+                style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.7 }}
                 dangerouslySetInnerHTML={{ __html: p.description }}
               />
             </>
@@ -244,7 +257,7 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
             <>
               <SectionHeading>Location Map</SectionHeading>
               <div
-                style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}
+                style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}
                 dangerouslySetInnerHTML={{ __html: p.mapsEmbed }}
               />
             </>
@@ -256,11 +269,12 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
               <SectionHeading>Seller / Owner Information</SectionHeading>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 6 }}>
                 <div style={{
-                  width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                  width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
                   background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid var(--surface)', boxShadow: 'var(--shadow-xs)',
                 }}>
                   {p.ownerPhoto
-                    ? <img src={p.ownerPhoto.data} alt={p.ownerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={p.ownerPhoto.data} alt={p.ownerName} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <User size={20} style={{ color: 'var(--text-lt)' }} />
                   }
                 </div>
@@ -280,15 +294,17 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
           {documents.length > 0 && (
             <>
               <SectionHeading>Documents &amp; Files</SectionHeading>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {documents.map((f) => (
                   <a
                     key={f.id} href={f.data} download={f.name}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)',
-                      textDecoration: 'none', color: 'inherit',
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                      border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)',
+                      textDecoration: 'none', color: 'inherit', transition: 'background 0.15s ease, border-color 0.15s ease',
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.borderColor = '#D6DCE5'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
                   >
                     <FileText size={15} style={{ color: 'var(--text-lt)', flexShrink: 0 }} />
                     <span style={{ fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -314,9 +330,9 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-            <button className="btn-primary" style={{ background: '#F9A825', color: '#111' }} onClick={onEdit}>
-              <Pencil size={14} style={{ marginRight: 6 }} /> Edit Property
+          <div style={{ display: 'flex', gap: 10, marginTop: 26 }}>
+            <button className="btn-primary" onClick={onEdit}>
+              <Pencil size={14} /> Edit Property
             </button>
             <button className="btn-ghost" onClick={onClose}>Close</button>
           </div>
@@ -327,7 +343,7 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
       {lightbox !== null && images[lightbox] && (
         <div
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300,
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 300,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
           onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
@@ -335,10 +351,12 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
           <button
             onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
             style={{
-              position: 'absolute', top: 20, right: 20, width: 36, height: 36, borderRadius: '50%',
+              position: 'absolute', top: 20, right: 20, width: 38, height: 38, borderRadius: '50%',
               background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s ease',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.28)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
           >
             <X size={18} />
           </button>
@@ -347,10 +365,12 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
             <button
               onClick={(e) => { e.stopPropagation(); navLightbox(-1); }}
               style={{
-                position: 'absolute', left: 20, width: 40, height: 40, borderRadius: '50%',
+                position: 'absolute', left: 20, width: 42, height: 42, borderRadius: '50%',
                 background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.28)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
             >
               <ChevronLeft size={20} />
             </button>
@@ -358,7 +378,7 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
 
           <img
             src={images[lightbox].data} alt={images[lightbox].name}
-            style={{ maxWidth: '85vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8 }}
+            style={{ maxWidth: '85vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 10 }}
             onClick={(e) => e.stopPropagation()}
           />
 
@@ -366,10 +386,12 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
             <button
               onClick={(e) => { e.stopPropagation(); navLightbox(1); }}
               style={{
-                position: 'absolute', right: 20, width: 40, height: 40, borderRadius: '50%',
+                position: 'absolute', right: 20, width: 42, height: 42, borderRadius: '50%',
                 background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.28)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
             >
               <ChevronRight size={20} />
             </button>
@@ -380,21 +402,15 @@ const PropertyView = ({ property: p, onClose, onEdit }) => {
   );
 };
 
-// ─── Stat pill for the header ──────────────────────────────────────────
-const StatPill = ({ icon, label, value, color }) => (
-  <div style={{
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
-    background: '#fff', border: '1px solid var(--border)', borderRadius: 12,
-  }}>
-    <div style={{
-      width: 34, height: 34, borderRadius: 9, background: color.bg, color: color.fg,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}>
+// ─── Stat card for the floating cover strip ────────────────────────────
+const StatCard = ({ icon, label, value, tint }) => (
+  <div className="stat-card">
+    <div className="stat-icon" style={{ background: tint.bg, color: tint.fg }}>
       {icon}
     </div>
     <div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--zinc-900)', lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--text-lt)', fontWeight: 600 }}>{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
     </div>
   </div>
 );
@@ -409,6 +425,11 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
   const [hoverRow, setHoverRow] = useState(null);
 
   const properties = db.brokerages || [];
+  const cover = db.propertiesCover || null;
+
+  const setCover = (nextCover) => {
+    setDb((prev) => ({ ...prev, propertiesCover: nextCover }));
+  };
 
   const filtered = useMemo(() => {
     return properties.filter((p) => {
@@ -460,73 +481,69 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
 
   return (
     <div>
-      {/* Header */}
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#B45309',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Building2 size={20} />
-            </div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--zinc-900)' }}>All Properties</h1>
-          </div>
-          <p style={{ color: 'var(--text-lt)', fontSize: 15, marginTop: 6, marginLeft: 50 }}>
-            {filtered.length} record{filtered.length !== 1 && 's'} · internal land &amp; flat purchase register
-          </p>
-        </div>
-        <button
-          className="btn-primary"
-          style={{
-            background: '#F9A825', color: '#111', display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 20px', fontSize: 14.5, fontWeight: 700, borderRadius: 10,
-            boxShadow: '0 4px 14px rgba(249,168,37,0.35)',
-          }}
-          onClick={() => setView('brokerages_add')}
-        >
-          <LandPlot size={17} /> Add Property
-        </button>
-      </div>
+      {/* ── Cover / hero banner with floating stat cards ── */}
+      <CoverSection
+        cover={cover}
+        onChange={setCover}
+        eyebrow="Internal Register"
+        title="All Properties"
+        subtitle="Every land and flat purchase your team has recorded, in one portfolio view."
+        primaryAction={{ label: 'Add Property', icon: <LandPlot size={17} />, onClick: () => setView('brokerages_add') }}
+        statsSlot={
+          <>
+            <StatCard icon={<Building2 size={20} />} label="Total Properties" value={stats.total} tint={{ bg: 'var(--info-bg)', fg: 'var(--info)' }} />
+            <StatCard icon={<Home size={20} />} label="Available" value={stats.available} tint={{ bg: 'var(--available-bg)', fg: 'var(--available-fg)' }} />
+            <StatCard icon={<Layers size={20} />} label="Sold Out" value={stats.soldout} tint={{ bg: 'var(--soldout-bg)', fg: 'var(--soldout-fg)' }} />
+            <StatCard icon={<Wallet size={20} />} label="Portfolio Value (BDT)" value={`৳${stats.totalValue.toLocaleString()}`} tint={{ bg: 'var(--primary-soft)', fg: 'var(--primary-dk)' }} />
+          </>
+        }
+      />
 
-      {/* Stat strip */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <StatPill icon={<Building2 size={16} />} label="Total Properties" value={stats.total} color={{ bg: '#EFF6FF', fg: '#1D4ED8' }} />
-        <StatPill icon={<Home size={16} />} label="Available" value={stats.available} color={{ bg: '#D1FAE5', fg: '#065F46' }} />
-        <StatPill icon={<Layers size={16} />} label="Sold Out" value={stats.soldout} color={{ bg: '#F1F5F9', fg: '#475569' }} />
-        <StatPill icon={<span style={{ fontWeight: 800, fontSize: 15 }}>৳</span>} label="Portfolio Value (BDT)" value={stats.totalValue.toLocaleString()} color={{ bg: '#FFF7ED', fg: '#C2410C' }} />
+      {/* Spacer so the floating stat cards don't crowd the filter bar */}
+      <div style={{ height: 40 }} />
+
+      {/* Section label / record count, echoing the header removed into the cover */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+        <span style={{ fontSize: 13.5, color: 'var(--text-lt)', fontWeight: 600 }}>
+          {filtered.length} record{filtered.length !== 1 && 's'} shown
+        </span>
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ display: 'flex', gap: 12, padding: '14px 18px', marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px' }}>
-          <Search size={15} style={{ color: 'var(--text-lt)' }} />
+      <div className="card" style={{ display: 'flex', gap: 14, padding: '18px 22px', marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 260px',
+          border: '1.5px solid var(--border)', borderRadius: 11, padding: '11px 14px',
+          transition: 'border-color 0.15s ease',
+        }}>
+          <Search size={16} style={{ color: 'var(--text-lt)', flexShrink: 0 }} />
           <input
             value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search location, block, serial, owner…"
-            style={{ border: 'none', outline: 'none', fontSize: 13.5, width: '100%' }}
+            style={{ border: 'none', outline: 'none', fontSize: 13.75, width: '100%', background: 'transparent', fontFamily: 'var(--font-body)' }}
           />
-          {search && <X size={14} style={{ cursor: 'pointer', color: 'var(--text-lt)' }} onClick={() => setSearch('')} />}
+          {search && <X size={14} style={{ cursor: 'pointer', color: 'var(--text-lt)', flexShrink: 0 }} onClick={() => setSearch('')} />}
         </div>
-        <select className="input-field" style={{ width: 'auto' }} value={catF} onChange={(e) => setCatF(e.target.value)}>
+        <select className="input-field" style={{ width: 'auto', cursor: 'pointer' }} value={catF} onChange={(e) => setCatF(e.target.value)}>
           <option value="all">All categories</option>
           {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className="input-field" style={{ width: 'auto' }} value={statusF} onChange={(e) => setStatusF(e.target.value)}>
+        <select className="input-field" style={{ width: 'auto', cursor: 'pointer' }} value={statusF} onChange={(e) => setStatusF(e.target.value)}>
           <option value="all">All statuses</option>
           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
       {/* Table */}
-      <div className="card table-scroll" style={{ overflow: 'hidden', borderRadius: 14 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="card table-scroll" style={{ overflow: 'hidden', borderRadius: 20 }}>
+        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
           <thead>
-            <tr style={{ background: 'var(--surface-2)' }}>
+            <tr>
               {['Location', 'Category', 'Details', 'Owner', 'Purchase Price (BDT)', 'Status', 'Actions'].map((h) => (
                 <th key={h} style={{
-                  padding: '13px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700,
-                  color: 'var(--text-lt)', textTransform: 'uppercase', letterSpacing: '0.04em',
+                  padding: '16px 20px', textAlign: 'left', fontSize: 12, fontWeight: 700,
+                  color: 'var(--text-lt)', textTransform: 'uppercase', letterSpacing: '0.05em',
+                  borderBottom: '1px solid var(--border)',
                 }}>
                   {h}
                 </th>
@@ -540,34 +557,34 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
                 onMouseEnter={() => setHoverRow(p.id)}
                 onMouseLeave={() => setHoverRow(null)}
                 style={{
-                  background: hoverRow === p.id ? 'rgba(249,168,37,0.06)' : (idx % 2 ? 'rgba(148,163,184,0.04)' : 'transparent'),
-                  borderTop: '1px solid var(--border)',
-                  transition: 'background 0.12s ease',
+                  background: hoverRow === p.id ? 'rgba(249,168,37,0.07)' : (idx % 2 ? 'rgba(148,163,184,0.035)' : 'transparent'),
+                  borderTop: '1px solid var(--border-soft)',
+                  boxShadow: hoverRow === p.id ? 'inset 3px 0 0 var(--primary)' : 'inset 3px 0 0 transparent',
                 }}
               >
                 <td
-                  style={{ padding: '14px 16px', cursor: 'pointer', fontWeight: 700, color: 'var(--zinc-900)' }}
+                  style={{ padding: '18px 20px', cursor: 'pointer', fontWeight: 700, color: 'var(--zinc-900)' }}
                   onClick={() => setViewing(p)}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <MapPin size={14} style={{ color: 'var(--text-lt)', flexShrink: 0 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <MapPin size={15} style={{ color: 'var(--primary-dk)', flexShrink: 0 }} />
                     {p.location}
                   </div>
                 </td>
-                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{p.category}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{details(p)}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13.5, color: 'var(--text)' }}>{p.ownerName || '—'}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13.5, fontWeight: 700, color: 'var(--zinc-900)' }}>
+                <td style={{ padding: '18px 20px', fontSize: 13.75, color: 'var(--text)' }}>{p.category}</td>
+                <td style={{ padding: '18px 20px', fontSize: 13.75, color: 'var(--text)' }}>{details(p)}</td>
+                <td style={{ padding: '18px 20px', fontSize: 13.75, color: 'var(--text)' }}>{p.ownerName || '—'}</td>
+                <td style={{ padding: '18px 20px', fontSize: 13.75, fontWeight: 700, color: 'var(--zinc-900)' }}>
                   {Number(p.purchasePrice).toLocaleString()}
                 </td>
-                <td style={{ padding: '14px 16px' }}>
+                <td style={{ padding: '18px 20px' }}>
                   <span style={{
-                    ...STATUS_STYLE[p.status], padding: '4px 12px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
+                    ...STATUS_STYLE[p.status], padding: '5px 13px', borderRadius: 99, fontSize: 11.5, fontWeight: 700,
                   }}>
                     {p.status}
                   </span>
                 </td>
-                <td style={{ padding: '14px 16px' }}>
+                <td style={{ padding: '18px 20px' }}>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <ActionButton variant="view" icon={<Eye size={14} />} label="View" onClick={() => setViewing(p)} />
                     <ActionButton variant="edit" icon={<Pencil size={14} />} label="Edit" onClick={() => setEditing(p)} />
@@ -578,15 +595,15 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <td colSpan={7} style={{ padding: '56px 24px', textAlign: 'center' }}>
                   <div style={{
-                    width: 48, height: 48, borderRadius: '50%', background: 'var(--surface-2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
+                    width: 52, height: 52, borderRadius: '50%', background: 'var(--surface-2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
                   }}>
-                    <Building2 size={22} style={{ color: 'var(--text-lt)' }} />
+                    <Building2 size={24} style={{ color: 'var(--text-lt)' }} />
                   </div>
-                  <div style={{ fontWeight: 700, color: 'var(--zinc-900)', fontSize: 15 }}>No properties found</div>
-                  <div style={{ color: 'var(--text-lt)', fontSize: 13.5, marginTop: 4 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--zinc-900)', fontSize: 15.5 }}>No properties found</div>
+                  <div style={{ color: 'var(--text-lt)', fontSize: 13.75, marginTop: 4 }}>
                     Try adjusting your filters, or add a new property to get started.
                   </div>
                 </td>
@@ -608,7 +625,7 @@ const ManageProperties = ({ db, setDb, logAction, setView }) => {
       {/* Edit modal */}
       {editing && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 200,
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', zIndex: 200,
           display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px',
         }}>
           <PropertyForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} submitLabel="Save Changes" />

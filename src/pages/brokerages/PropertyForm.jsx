@@ -487,7 +487,7 @@ const PropertyForm = ({ initial, onSubmit, onCancel, submitLabel = 'Create' }) =
       </Field>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button className="btn-primary" style={{ background: '#F9A825', color: '#111' }} onClick={() => handleSubmit(false)}>
+        <button className="btn-primary" onClick={() => handleSubmit(false)}>
           {submitLabel}
         </button>
         {!initial && (
